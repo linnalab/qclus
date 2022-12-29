@@ -138,6 +138,7 @@ def qclus(outs_path, loompy_path,
         adata.var[entry] = [True if x in nucl_gene_set_dict[entry] else False for x in adata.var.index]
         sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
         sc.tl.score_genes(adata, gene_list = nucl_gene_set_dict[entry], score_name = f"score_{entry}")
+        
 
     if clustering:
         adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:,clustering_features], k=clustering_k)
