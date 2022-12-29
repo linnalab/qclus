@@ -1,7 +1,7 @@
-#QClus: Robust and reliable preprocessing method for human heart snRNA-seq
+# QClus: Robust and reliable preprocessing method for human heart snRNA-seq
 
-##Required packages
+## Required packages
 
-##Installation
+## Installation
 
-##Quickstart
+## Quickstart
