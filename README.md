@@ -4,11 +4,12 @@
 
 
     numpy>1.20
-    matplotlib>=3.4.0
     pandas>=1.2.0
-    pegasusio
-    pegasuspy>=1.3
-    seaborn>=0.11
+    scrublet    
+    loompy
+    scanpy
+    anndata
+    sklearn
 
 
 ## Installation
