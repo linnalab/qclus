@@ -1,19 +1,7 @@
-numpy>1.20
-pandas>=1.2.0
+numpy
+pandas
 scrublet    
 loompy
 scanpy
 anndata
 sklearn
-
-import numpy as np 
-import pandas as pd
-import scrublet as scr
-import loompy
-import scanpy as sc
-import anndata
-import os
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import MinMaxScaler
-sc.settings.verbosity = 0         # verbosity: errors (0), warnings (1), info (2), hints (3)
-import subprocess

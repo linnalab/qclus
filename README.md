@@ -3,8 +3,8 @@
 ## Required packages
 
 
-    numpy>1.20
-    pandas>=1.2.0
+    numpy
+    pandas
     scrublet    
     loompy
     scanpy
