@@ -39,7 +39,7 @@ nucl_gene_set_dict = {
 "nucl_1" : nucl_genes_50[:1]
 }
 
-def qclus(outs_path, loompy_path, 
+def run_qclus(outs_path, loompy_path, 
                     gene_set_dict=celltype_gene_set_dict, 
                     nucl_gene_set_dict=nucl_gene_set_dict, 
                     minimum_genes=500, 
