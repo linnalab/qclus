@@ -8,12 +8,13 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 sc.settings.verbosity = 0   # verbosity: errors (0), warnings (1), info (2), hints (3)
 
-from gene_lists import nucl_genes_50, celltype_gene_set_dict
+from qclus.utils import *
+from qclus.gene_lists import nucl_genes_50, celltype_gene_set_dict
 
 
-def run_qclus(outs_path, loompy_path, 
+def run_qclus(counts_path, loompy_path, 
                     gene_set_dict=celltype_gene_set_dict, 
-                    nucl_gene_set_dict=nucl_gene_set_dict, 
+                    nucl_gene_set=nucl_genes_50, 
                     minimum_genes=500, 
                     maximum_genes=6000, 
                     max_mito_perc=40, 
@@ -31,7 +32,7 @@ def run_qclus(outs_path, loompy_path,
                     outlier_mito_diff=5):
     
     
-    adata = sc.read_10x_h5(f"{outs_path}/filtered_feature_bc_matrix.h5")
+    adata = sc.read_10x_h5(f"{counts_path}")
     adata.var_names_make_unique()
 
     adata.obs.index = create_new_index(adata.obs.index)
@@ -51,12 +52,10 @@ def run_qclus(outs_path, loompy_path,
     sc.pp.normalize_total(adata, target_sum=1e4)
     sc.pp.log1p(adata)
     
-    for entry in nucl_gene_set_dict:
-        adata.var[entry] = [True if x in nucl_gene_set_dict[entry] else False for x in adata.var.index]
-        sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
-        sc.tl.score_genes(adata, gene_list = nucl_gene_set_dict[entry], score_name = f"score_{entry}")
+    adata.var["nucl_30"] = [True if x in nucl_gene_set_dict[:30] else False for x in adata.var.index]
+    sc.pp.calculate_qc_metrics(adata, qc_vars=["nucl_30"], percent_top=None, log1p=False, inplace=True)
+    sc.tl.score_genes(adata, gene_list = nucl_gene_set_dict[:30], score_name = "score_nucl_30")
         
-
     if clustering:
         adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:,clustering_features], k=clustering_k)
     if outlier_filter:

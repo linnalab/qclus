@@ -6,3 +6,4 @@ qclus_test.ipynb
 vscode.ipynb
 html
 .DS_Store
+__pycache__

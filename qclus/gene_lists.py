@@ -18,13 +18,3 @@ celltype_gene_set_dict = {
 "MESO" : ["C3", "SULF1", "AP000561.1", "PRG4", "GPM6A", "CDON", "DPP6", "CCDC80", "EZR", "FOS", "BNC1", "AC245041.2", "PRKD1", "CYSTM1", "TLL1", "WT1"],
 "MP" : ["TBXAS1", "SLC9A9", "MRC1", "MS4A6A", "RBM47", "DOCK2", "MCTP1", "SYK", "MSR1", "ATP8B4", "F13A1", "CD74", "MS4A4E", "ADAP2"]
 }
-
-nucl_gene_set_dict = {
-"nucl_50" : nucl_genes_50[:50],
-"nucl_40" : nucl_genes_50[:40],
-"nucl_30" : nucl_genes_50[:30],
-"nucl_20" : nucl_genes_50[:20],
-"nucl_10" : nucl_genes_50[:10],
-"nucl_2" : nucl_genes_50[:2],
-"nucl_1" : nucl_genes_50[:1]
-}
