@@ -1,7 +1,6 @@
 import numpy as np 
 import pandas as pd
 import scrublet as scr
-import loompy
 import scanpy as sc
 import anndata
 from sklearn.cluster import KMeans
