@@ -52,9 +52,9 @@ def run_qclus(counts_path, loompy_path,
     sc.pp.normalize_total(adata, target_sum=1e4)
     sc.pp.log1p(adata)
     
-    adata.var["nucl_30"] = [True if x in nucl_gene_set_dict[:30] else False for x in adata.var.index]
+    adata.var["nucl_30"] = [True if x in nucl_genes_50[:30] else False for x in adata.var.index]
     sc.pp.calculate_qc_metrics(adata, qc_vars=["nucl_30"], percent_top=None, log1p=False, inplace=True)
-    sc.tl.score_genes(adata, gene_list = nucl_gene_set_dict[:30], score_name = "score_nucl_30")
+    sc.tl.score_genes(adata, gene_list = nucl_genes_50[:30], score_name = "score_nucl_30")
         
     if clustering:
         adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:,clustering_features], k=clustering_k)
