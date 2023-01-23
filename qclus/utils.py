@@ -1,4 +1,6 @@
 import loompy
+import pandas as pd
+
 
 def create_new_index(index):
     barcodes = [x[0:16] for x in index.tolist()]
