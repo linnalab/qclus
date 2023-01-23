@@ -1,5 +1,7 @@
 import loompy
 import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import MinMaxScaler
 
 
 def create_new_index(index):

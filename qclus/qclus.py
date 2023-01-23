@@ -1,11 +1,10 @@
 #import numpy as np 
-import pandas as pd
-import scrublet as scr
+#import pandas as pd
+#import scrublet as scr
 import scanpy as sc
-import anndata
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import MinMaxScaler
-sc.settings.verbosity = 0   # verbosity: errors (0), warnings (1), info (2), hints (3)
+#import anndata
+#from sklearn.cluster import KMeans
+#from sklearn.preprocessing import MinMaxScaler
 
 from qclus.utils import *
 from qclus.gene_lists import nucl_genes_50, celltype_gene_set_dict
@@ -14,6 +13,7 @@ from qclus.gene_lists import nucl_genes_50, celltype_gene_set_dict
 def run_qclus(counts_path, loompy_path, 
                     gene_set_dict=celltype_gene_set_dict, 
                     nucl_gene_set=nucl_genes_50, 
+                    scanpy_verbosity=3, # verbosity: errors (0), warnings (1), info (2), hints (3)
                     minimum_genes=500, 
                     maximum_genes=6000, 
                     max_mito_perc=40, 
@@ -30,6 +30,7 @@ def run_qclus(counts_path, loompy_path,
                     outlier_unspliced_diff=0.1, 
                     outlier_mito_diff=5):
     
+    sc.settings.verbosity = scanpy_verbosity
     
     adata = sc.read_10x_h5(f"{counts_path}")
     adata.var_names_make_unique()
