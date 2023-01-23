@@ -26,6 +26,13 @@ def run_qclus(counts_path, loompy_path,
                                     'fraction_unspliced'], 
                     clustering_k=4, 
                     clusters_to_select=["0", "1", "2"], 
+                    scrublet=True,
+                    scrublet_expected_rate=0.06, 
+                    scrublet_minimum_counts=2, 
+                    scrublet_minimum_cells=3, 
+                    scrublet_minimum_gene_variability_pctl=85, 
+                    scrublet_n_pcs=30, 
+                    scrublet_thresh=0.1, 
                     outlier_filter=True, 
                     outlier_unspliced_diff=0.1, 
                     outlier_mito_diff=5):
@@ -48,6 +55,9 @@ def run_qclus(counts_path, loompy_path,
     adata = adata[adata.obs.n_genes_by_counts >= minimum_genes]
     adata = adata[adata.obs.n_genes_by_counts <= maximum_genes]
     adata = adata[adata.obs.pct_counts_MT <= max_mito_perc]
+
+    if scrublet:
+        adata.obs['score_scrublet'] = calculate_scrublet(adata, expected_rate=scrublet_expected_rate, minimum_counts=scrublet_minimum_counts, minimum_cells=scrublet_minimum_cells, minimum_gene_variability_pctl=scrublet_minimum_gene_variability_pctl, n_pcs=scrublet_n_pcs, thresh=scrublet_thresh)
     
     sc.pp.normalize_total(adata, target_sum=1e4)
     sc.pp.log1p(adata)
@@ -65,5 +75,8 @@ def run_qclus(counts_path, loompy_path,
         adata = adata[adata.obs.kmeans.isin(clusters_to_select)]
     if outlier_filter:
         adata = adata[adata.obs.outlier=="0"]
+    if scrublet:
+        adata = adata[adata.obs.score_scrublet < scrublet_thresh]
+
 
     return adata.obs.index.to_list()

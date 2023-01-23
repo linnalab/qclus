@@ -19,6 +19,22 @@ def create_fraction_unspliced_metric(loompy_path, index):
     loompy_con.close()
     return fraction_unspliced_df[barcodes_data].values
 
+
+def calculate_scrublet(adata, 
+                       expected_rate=0.06, 
+                       minimum_counts=2, 
+                       minimum_cells=3, 
+                       minimum_gene_variability_pctl=85, 
+                       n_pcs=30, 
+                       thresh=0.10):
+    scrub = scr.Scrublet(adata.X, expected_doublet_rate=expected_rate)
+    doublet_scores, predicted_doublets = scrub.scrub_doublets(min_counts=minimum_counts, 
+                                                                        min_cells=minimum_cells, 
+                                                                        min_gene_variability_pctl=minimum_gene_variability_pctl, 
+                                                                        n_prin_comps=n_pcs)
+    scrub.call_doublets(threshold=thresh)
+    return scrub.doublet_scores_obs_
+
 def do_kmeans(X_full, k):
     X_minmax = MinMaxScaler().fit_transform(X_full)
     X_minmax = pd.DataFrame(X_minmax, index = X_full.index, columns = X_full.columns)
