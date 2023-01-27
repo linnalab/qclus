@@ -35,7 +35,7 @@ Below is a quick workflow for QClus.
 
 For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
 
-
+    ```python
     #import library
     import qclus
 
@@ -46,3 +46,4 @@ For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
     #run QClus with default settings
     adata = qclus.run_qclus(counts_path,  
                             loompy_path)
+    ```
