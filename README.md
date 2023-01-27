@@ -29,9 +29,7 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
     
 2. In the root directory of the package, run the following command to install the required packages:
 
-```
-    pip install .
-```
+    ```pip install .```
 
 ## Quickstart guide
 
