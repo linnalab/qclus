@@ -35,7 +35,8 @@ Below is a quick workflow for QClus.
 
 For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
 
-    ```python#import library
+    ```python
+    #import library
     import qclus
 
     #Define the path to an .h5 file or faw counts, as well as the path to a .loom file containing the splicing information for those same counts
@@ -44,4 +45,5 @@ For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
 
     #run QClus with default settings
     adata = qclus.run_qclus(counts_path,  
-                            loompy_path)```
+                            loompy_path)
+    ```
