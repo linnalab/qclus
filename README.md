@@ -45,5 +45,5 @@ loompy_path = "counts_counts_CAD_739.loom"
 
 #run QClus with default settings
 adata = qclus.run_qclus(counts_path,  
-                            loompy_path)
+                        loompy_path)
 ```
