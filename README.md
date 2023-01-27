@@ -23,11 +23,13 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 
 1. Clone this repository into a suitable location on your machine or server using the following command:
 
-    git clone https://github.com/johannesojanen/qclus.git
+```
+git clone https://github.com/johannesojanen/qclus.git
+```
     
 2. In the root directory of the package, run the following command to install the required packages:
-
-    pip install .
+```
+pip install .
 
 ## Quickstart guide
 
