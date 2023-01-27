@@ -24,12 +24,14 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 1. Clone this repository into a suitable location on your machine or server using the following command:
 
 ```
-git clone https://github.com/johannesojanen/qclus.git
+    git clone https://github.com/johannesojanen/qclus.git
 ```
     
 2. In the root directory of the package, run the following command to install the required packages:
+
 ```
-pip install .
+    pip install .
+```
 
 ## Quickstart guide
 
@@ -38,14 +40,14 @@ Below is a quick workflow for QClus.
 For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
 
 ```python
-#import library
-import qclus
+    #import library
+    import qclus
 
-#Define the path to an .h5 file or faw counts, as well as the path to a .loom file containing the splicing information for those same counts
-counts_path = "filtered_feature_bc_matrix_739.h5"
-loompy_path = "counts_counts_CAD_739.loom"
+    #Define the path to an .h5 file or faw counts, as well as the path to a .loom file containing the splicing information for those same counts
+    counts_path = "filtered_feature_bc_matrix_739.h5"
+    loompy_path = "counts_counts_CAD_739.loom"
 
-#run QClus with default settings
-adata = qclus.run_qclus(counts_path,  
-                        loompy_path)
+    #run QClus with default settings
+    adata = qclus.run_qclus(counts_path,  
+                            loompy_path)
 ```
