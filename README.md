@@ -35,7 +35,7 @@ Below is a quick workflow for QClus.
 
 For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
 
-    ```python
+    ```
     #import library
     import qclus
 
