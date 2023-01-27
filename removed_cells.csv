@@ -1,0 +1,4 @@
+,cells_after_removal,removed_cells,fraction_unspliced,pct_counts_MT
+clustering,2892,174,0.49633288829550515,7.181185
+outlier_filter,2663,229,0.5882352941176471,6.6037736
+scrublet,2389,274,0.7675526827160867,1.3059938

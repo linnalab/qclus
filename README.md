@@ -31,4 +31,18 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 
 ## Quickstart guide
 
+Below is a quick workflow for QClus. 
 
+For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
+
+
+    #import library
+    import qclus
+
+    #Define the path to an .h5 file or faw counts, as well as the path to a .loom file containing the splicing information for those same counts
+    counts_path = "filtered_feature_bc_matrix_739.h5"
+    loompy_path = "counts_counts_CAD_739.loom"
+
+    #run QClus with default settings
+    adata = qclus.run_qclus(counts_path,  
+                            loompy_path)

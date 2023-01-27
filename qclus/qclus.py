@@ -64,7 +64,7 @@ def run_qclus(counts_path, loompy_path,
 
 
     adata.obs["initial_filter"] = ["keep" if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else "remove" for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
-    #adata = adata[adata.obs["initial_filter"]=="keep"]
+    adata = adata[adata.obs["initial_filter"]=="keep"]
     
     if scrublet:
         adata.obs['score_scrublet'] = calculate_scrublet(adata, 
