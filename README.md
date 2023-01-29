@@ -38,7 +38,7 @@ Below is a quick workflow for QClus. Please see the tutorials/tutorial.ipynb not
 #import library
 import qclus
 
-#Define the path to an .h5 file or faw counts, as well as 
+#Define the path to an .h5 file of raw counts, as well as 
 #the path to a .loom file containing the splicing information for those same counts
 counts_path = "filtered_feature_bc_matrix_739.h5"
 loompy_path = "counts_counts_CAD_739.loom"
