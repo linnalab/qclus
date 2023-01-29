@@ -31,7 +31,7 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 
 ## Quickstart guide
 
-Below is a quick workflow for QClus. Please see the tutorials/tutorial.ipynb notebook for a more thorough tutorial.
+Below is a quick workflow for QClus. Please see the tutorials/tutorial.ipynb notebook for a more thorough guide.
 
 
 ```python
@@ -67,4 +67,4 @@ You can now evaluate the results, move forward with downstream analysis or save 
 
 Note: The "-1" suffix of the barcodes added by Cell Ranger has been removed and adata.var_names_make_unique() has been run to make the variable names unique.
 
-For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
+For a more thorough guide please see the tutorials/tutorial.ipynb notebook.
