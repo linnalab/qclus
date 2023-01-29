@@ -3,9 +3,7 @@
 output
 samples
 qclus_test.ipynb
-vscode.ipynb
 html
 .DS_Store
 __pycache__
 html_hill
-fig_3_heatmap.ipynb
