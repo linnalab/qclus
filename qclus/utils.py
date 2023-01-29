@@ -67,9 +67,9 @@ def annotate_outliers(df, unspliced_diff, mito_diff):
     df['max_non_CM'] = ["1" if x in max_non_CM else "0" for x in df.kmeans]
     
     #annotate cells as outlier ("1") or not outlier ("0")
-    return ["keep" if 
+    return [False if 
             ((fraction_unspliced > (df[df.max_non_CM == "1"].fraction_unspliced.quantile(.25) - unspliced_diff)) 
              & (pct_counts_MT < (df[df.max_non_CM == "1"].pct_counts_MT.quantile(.75) + mito_diff))) 
-            else "remove" 
+            else True 
             for fraction_unspliced,pct_counts_MT 
             in zip(df.fraction_unspliced, df.pct_counts_MT)]

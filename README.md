@@ -33,6 +33,23 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 
 Below is a quick workflow for QClus. 
 
+The code returns an AnnData object with your raw unfiltered counts as well as the following annotations in the adata.obs dataframe for each barcode: 
+
+- fraction_unspliced
+    - the fraction of unspliced reads for that barcode
+- pct_counts_MT
+    - percentage of reads aligning to the mitochondrial genome
+- total_counts
+    - total UMI counts for that barcode
+- n_genes_by_counts
+    - number of genes expressed
+- qclus
+    - results of the QClus algorithm
+    - Cells are either tagged as "passed" or by the name of the filtering step that tagged that barcode to be removed
+
+
+
+
 For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
 
 ```python
