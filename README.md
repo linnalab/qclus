@@ -31,7 +31,23 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 
 ## Quickstart guide
 
-Below is a quick workflow for QClus. 
+Below is a quick workflow for QClus. Please see the tutorials/tutorial.ipynb notebook for a more thorough tutorial.
+
+
+```python
+#import library
+import qclus
+
+#Define the path to an .h5 file or faw counts, as well as 
+#the path to a .loom file containing the splicing information for those same counts
+counts_path = "filtered_feature_bc_matrix_739.h5"
+loompy_path = "counts_counts_CAD_739.loom"
+
+#run QClus with default settings
+adata = qclus.run_qclus(counts_path,  
+                        loompy_path)
+```
+
 
 The code returns an AnnData object with your raw unfiltered counts as well as the following annotations in the adata.obs dataframe for each barcode: 
 
@@ -47,21 +63,8 @@ The code returns an AnnData object with your raw unfiltered counts as well as th
     - results of the QClus algorithm
     - Cells are either tagged as "passed" or by the name of the filtering step that tagged that barcode to be removed
 
+You can now evaluate the results, move forward with downstream analysis or save this object with adata.write().
 
-
+Note: The "-1" suffix of the barcodes added by Cell Ranger has been removed and adata.var_names_make_unique() has been run to make the variable names unique.
 
 For a more thorough tutorial please see the tutorials/tutorial.ipynb notebook.
-
-```python
-#import library
-import qclus
-
-#Define the path to an .h5 file or faw counts, as well as 
-#the path to a .loom file containing the splicing information for those same counts
-counts_path = "filtered_feature_bc_matrix_739.h5"
-loompy_path = "counts_counts_CAD_739.loom"
-
-#run QClus with default settings
-adata = qclus.run_qclus(counts_path,  
-                        loompy_path)
-```
