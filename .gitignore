@@ -2,7 +2,7 @@
 *.h5ad
 output
 samples
-qclus_test.ipynb
+
 html
 .DS_Store
 __pycache__
