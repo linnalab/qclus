@@ -3,6 +3,7 @@
 output
 samples
 qclus_test.ipynb
+tutorial.ipynb
 html
 .DS_Store
 __pycache__

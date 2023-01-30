@@ -32,8 +32,9 @@ def calculate_scrublet(adata,
     doublet_scores, predicted_doublets = scrub.scrub_doublets(min_counts=minimum_counts, 
                                                                         min_cells=minimum_cells, 
                                                                         min_gene_variability_pctl=minimum_gene_variability_pctl, 
-                                                                        n_prin_comps=n_pcs)
-    scrub.call_doublets(threshold=thresh)
+                                                                        n_prin_comps=n_pcs, 
+                                                                        verbose=False)
+    scrub.call_doublets(threshold=thresh, verbose=False)
     return scrub.doublet_scores_obs_
 
 def do_kmeans(X_full, k):

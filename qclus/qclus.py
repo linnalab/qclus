@@ -28,11 +28,15 @@ def run_qclus(counts_path, loompy_path,
                     outlier_unspliced_diff=0.1, 
                     outlier_mito_diff=5):
 
+    sc.settings.verbosity = 0
+
     #initialize AnnData object
     adata = sc.read_10x_h5(f"{counts_path}")
     adata.var_names_make_unique()
     adata.obs.index = create_new_index(adata.obs.index)
     adata_raw = adata.copy()
+
+
 
     #add fraction_unspliced annotation from .loom file
     adata.obs["fraction_unspliced"] = create_fraction_unspliced_metric(loompy_path, adata.obs.index)
