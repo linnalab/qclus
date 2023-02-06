@@ -1,4 +1,4 @@
-import scanpy as sc
+
 
 from qclus.utils import *
 from qclus.gene_lists import *

@@ -32,7 +32,7 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 
 ## Quickstart guide
 
-Below is a quick workflow for QClus. Please see the tutorials/tutorial.ipynb notebook for a more thorough guide.
+Below is a quickstart workflow for QClus. Please see the tutorials/tutorial.ipynb notebook for a more thorough guide on how to create the required .loom file as well as how to run the QClus algorithm.
 
 
 ```python
