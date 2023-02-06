@@ -1,7 +1,6 @@
-
-
 from qclus.utils import *
 from qclus.gene_lists import *
+import scanpy as sc
 
 def run_qclus(counts_path, loompy_path, 
                     gene_set_dict=celltype_gene_set_dict, 
