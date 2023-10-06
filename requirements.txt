@@ -1,7 +1,8 @@
 numpy
 pandas
-scrublet    
+scrublet
 loompy
 scanpy
 anndata
-sklearn
+scikit-learn
+leidenalg
