@@ -52,7 +52,7 @@ def do_kmeans(X_full, k):
     sorteddflist = sorted(dflist,key=lambda x:x["fraction_unspliced"]. mean(axis=0))
     sorteddflist.reverse()
     for dframe in sorteddflist:
-        #dframe['kmeans'] = pd.to_numeric(dframe['kmeans'], errors='coerce')
+        dframe['kmeans'] = pd.to_numeric(dframe['kmeans'], errors='coerce')
         clusters.append(str(int(dframe.kmeans.median())))
     return [str(clusters.index(x)) for x in X_full.kmeans]
 
