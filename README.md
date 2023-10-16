@@ -16,7 +16,7 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 - loompy
 - scanpy
 - anndata
-- sklearn
+- scikit-learn
 
 
 ## Installation
