@@ -1,7 +1,0 @@
-numpy
-pandas
-scrublet
-loompy
-scanpy
-anndata
-scikit-learn
