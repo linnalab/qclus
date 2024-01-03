@@ -1,9 +1,5 @@
 .ipynb_checkpoints/
-*.h5ad
-output
-samples
-qclus_test.ipynb
-html
-.DS_Store
-__pycache__
-html_hill
+build/
+qclus/__pycache__/
+qclus.egg-info/
+tutorials/.ipynb_checkpoints/
