@@ -10,13 +10,12 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 
 ## Required packages
 
-- numpy
 - pandas
-- scrublet    
 - loompy
 - scanpy
-- anndata
 - scikit-learn
+- scrublet
+
 
 
 ## Installation

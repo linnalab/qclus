@@ -3,6 +3,7 @@ from pathlib import Path
 
 setup(
     name='qclus',
+    version='0.1.0',
     description='Description',
     url='https://github.com/johannesojanen/qclus',
     author='Eloi Schauch and Johannes Ojanen',
