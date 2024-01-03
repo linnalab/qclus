@@ -4,4 +4,4 @@ scrublet
 loompy
 scanpy
 anndata
-sklearn
+scikit-learn
