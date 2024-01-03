@@ -1,5 +1,6 @@
 .ipynb_checkpoints/
-build/
+build
 qclus/__pycache__/
-qclus.egg-info/
+qclus.egg-info
 tutorials/.ipynb_checkpoints/
+.DS_Store
