@@ -6,7 +6,7 @@ You can find the original preprint for this method at the link below:
 
 https://www.biorxiv.org/content/10.1101/2022.10.21.513315v1
 
-Any and all comments/criticism/suggestions enthusiastically received! :-)
+Any and all comments/criticisms/suggestions are enthusiastically received! :-)
 
 ## Required packages
 
@@ -31,7 +31,7 @@ Any and all comments/criticism/suggestions enthusiastically received! :-)
 
 ## Quickstart guide
 
-Below is a quickstart workflow for QClus. Please see the tutorials/tutorial.ipynb notebook for a more thorough guide on how to create the required .loom file as well as how to run the QClus algorithm.
+Below is a quickstart workflow for QClus. Please see the tutorials/tutorial.ipynb notebook for a more thorough guide on how to run the QClus algorithm.
 
 
 ```python
