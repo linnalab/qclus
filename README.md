@@ -20,6 +20,10 @@ Any and all comments/criticisms/suggestions are enthusiastically received! :-)
 
 ## Installation
 
+In the future we will be adding QClus to PyPI,  making it available via pip install.
+
+Currently we recommend installing QClus from source. To do so, please follow the instructions below:
+
 1. Clone this repository into a suitable location on your machine or server using the following command:
 
     ```git clone https://github.com/scHEARTGROUP/qclus.git```
@@ -32,6 +36,10 @@ Any and all comments/criticisms/suggestions are enthusiastically received! :-)
 ## Quickstart guide
 
 Below is a quickstart workflow for QClus. Please see the tutorials/tutorial.ipynb notebook for a more thorough guide on how to run the QClus algorithm.
+
+QClus requires two files to run: a Cell Ranger generated filtered count matrix and a Velocyto generated loom file. 
+
+Detailed instructions on how to generate the loom file can be found in the [Velocyto documentation](http://velocyto.org/velocyto.py/tutorial/cli.html#running-velocyto-on-10x-data).
 
 
 ```python
