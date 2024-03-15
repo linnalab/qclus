@@ -48,8 +48,8 @@ import qclus
 
 #Define the path to an .h5 file of raw counts, as well as 
 #the path to a .loom file containing the splicing information for those same counts
-counts_path = "filtered_feature_bc_matrix_739.h5"
-loompy_path = "counts_counts_CAD_739.loom"
+counts_path = "filtered_feature_bc_matrix_CB-X36.h5"
+loompy_path = "counts_counts_CAD_CB-X36.loom"
 
 #run QClus with default settings
 adata = qclus.run_qclus(counts_path,  
