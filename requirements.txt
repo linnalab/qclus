@@ -3,3 +3,4 @@ loompy
 scanpy
 scikit-learn
 scrublet
+pysam
