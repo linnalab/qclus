@@ -2,7 +2,7 @@ from qclus.utils import *
 from qclus.gene_lists import *
 import scanpy as sc
 
-def run_qclus(counts_path, loompy_path, 
+def run_qclus(counts_path, fraction_unspliced, 
                     gene_set_dict=celltype_gene_set_dict, 
                     nucl_gene_set=nucl_genes_50, 
                     minimum_genes=500, 
@@ -35,10 +35,8 @@ def run_qclus(counts_path, loompy_path,
     adata.obs.index = create_new_index(adata.obs.index)
     adata_raw = adata.copy()
 
-
-
     #add fraction_unspliced annotation from .loom file
-    adata.obs["fraction_unspliced"] = create_fraction_unspliced_metric(loompy_path, adata.obs.index)
+    adata.obs["fraction_unspliced"] = fraction_unspliced.loc[adata.obs.index]
 
     #add cell type specific annotations from given gene sets
     for entry in gene_set_dict:
@@ -72,11 +70,6 @@ def run_qclus(counts_path, loompy_path,
     
     #Annotate raw counts with some basic quality metrics
     adata_raw.obs = adata.obs[["fraction_unspliced", "pct_counts_MT", "total_counts", "n_genes_by_counts"]]
-    
-    #initial filter
-    adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
-    initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
-    adata = adata[adata.obs.initial_filter==False]
 
     #calculate scrublet score for each cell
     if scrublet_filter:
@@ -97,6 +90,13 @@ def run_qclus(counts_path, loompy_path,
     sc.pp.calculate_qc_metrics(adata, qc_vars=["nucl_30"], percent_top=None, log1p=False, inplace=True)
     sc.tl.score_genes(adata, gene_list = nucl_gene_set[:30], score_name = "score_nucl_30")
     
+    adata_raw.obsm["QClus"] = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
+
+    #initial filter
+    adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
+    initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
+    adata = adata[adata.obs.initial_filter==False]
+
     #perform unsupervised clustering with the created cell statistics
     adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:,clustering_features], k=clustering_k)
     adata.obs["clustering_filter"] = [False if x in clusters_to_select else True for x in adata.obs.kmeans]

@@ -9,21 +9,30 @@ from tqdm import tqdm
 import os
 from umap import UMAP
 
+def add_qclus_embedding(adata, features, random_state=1, n_components=2):
+    # Extract the features from the AnnData object
+    X_full = adata.obs.loc[:, features]
+    # Scale the features
+    X_minmax = MinMaxScaler().fit_transform(X_full)
+    X_minmax = pd.DataFrame(X_minmax, index=X_full.index, columns=X_full.columns)
+    # Compute the embedding
+    umap = UMAP(random_state=random_state, n_components=n_components).fit_transform(X_minmax)
+    # Add the embedding to the AnnData object
+    return umap
 
 def create_new_index(index):
     barcodes = [x[0:16] for x in index.tolist()]
     return barcodes
 
-def create_fraction_unspliced_metric(loompy_path, index):
+def fraction_unspliced_from_loom(loompy_path):
     loompy_con = loompy.connect(loompy_path)
     barcodes = [x.split(':')[1][0:16] for x in loompy_con.ca['CellID'].tolist()]
-    spliced_df = pd.Series(loompy_con['spliced'][:,:].sum(0).tolist(), index = barcodes)
-    unspliced_df = pd.Series(loompy_con['unspliced'][:,:].sum(0).tolist(), index = barcodes)
-    ambiguous_df = pd.Series(loompy_con['ambiguous'][:,:].sum(0).tolist(), index = barcodes)
+    spliced_df = pd.Series(loompy_con['spliced'][:,:].sum(0).tolist(), index=barcodes)
+    unspliced_df = pd.Series(loompy_con['unspliced'][:,:].sum(0).tolist(), index=barcodes)
+    ambiguous_df = pd.Series(loompy_con['ambiguous'][:,:].sum(0).tolist(), index=barcodes)
     fraction_unspliced_df = unspliced_df / (spliced_df + unspliced_df + ambiguous_df)
-    barcodes_data = [x for x in index] 
     loompy_con.close()
-    return fraction_unspliced_df[barcodes_data].values
+    return pd.DataFrame({'fraction_unspliced': fraction_unspliced_df}, index=barcodes)
 
 
 def calculate_scrublet(adata, 
@@ -81,18 +90,6 @@ def annotate_outliers(df, unspliced_diff, mito_diff):
             for fraction_unspliced,pct_counts_MT 
             in zip(df.fraction_unspliced, df.pct_counts_MT)]
 
-def add_embedding(adata, features, embedding_key='X_umap', random_state=1, n_components=2):
-    # Extract the features from the AnnData object
-    X_full = adata.obs.loc[:, features]
-    # Scale the features
-    X_minmax = MinMaxScaler().fit_transform(X_full)
-    X_minmax = pd.DataFrame(X_minmax, index=X_full.index, columns=X_full.columns)
-    # Compute the embedding
-    umap = UMAP(random_state=random_state, n_components=n_components).fit_transform(X_minmax)
-    # Add the embedding to the AnnData object
-    adata.obsm[embedding_key] = umap
-    return adata
-
 def parse_bam_tags(interval, bam, bc, CB_tag, RE_tag, EXON_tag, INTRON_tag):
     bam_file = pysam.AlignmentFile(bam, "rb")
     tags = {
@@ -117,8 +114,7 @@ def parse_bam_tags(interval, bam, bc, CB_tag, RE_tag, EXON_tag, INTRON_tag):
     count_data = tags_df.groupby(['CB', 'RE']).size().unstack(fill_value=0).reindex(columns=[EXON_tag, INTRON_tag], fill_value=0)
     return count_data
 
-def nuclear_fraction_tags(outs=None, bam=None, bam_index=None, barcodes=None, regions=None, tiles=100, cores=None, cell_barcode_tag="CB", region_type_tag="RE", exon_tag="E", intron_tag="N", verbose=True):
-
+def fraction_unspliced_from_bam(outs=None, bam=None, bam_index=None, barcodes=None, regions=None, tiles=100, cores=None, cell_barcode_tag="CB", region_type_tag="RE", exon_tag="E", intron_tag="N", verbose=True):
     if outs:
         bam = f"{outs}/possorted_genome_bam.bam"
         bam_index = f"{outs}/possorted_genome_bam.bam.bai"
@@ -127,6 +123,9 @@ def nuclear_fraction_tags(outs=None, bam=None, bam_index=None, barcodes=None, re
 
     if not all([bam, bam_index, barcodes]):
         raise ValueError("Please provide bam, bam_index, and barcodes")
+
+    # Remove the "-1" suffix from each barcode
+    barcodes = [barcode.split("-")[0] for barcode in barcodes]
 
     bam_file = pysam.AlignmentFile(bam, "rb", index_filename=bam_index)
     if cores is None:
@@ -155,7 +154,7 @@ def nuclear_fraction_tags(outs=None, bam=None, bam_index=None, barcodes=None, re
         return None
     
     final_df = pd.concat(results).groupby(level=0).sum()
-    final_df['unspliced_fraction'] = final_df[intron_tag] / (final_df[intron_tag] + final_df[exon_tag])
-    final_df['unspliced_fraction'].fillna(0, inplace=True)
+    final_df['fraction_unspliced'] = final_df[intron_tag] / (final_df[intron_tag] + final_df[exon_tag])
+    final_df['fraction_unspliced'].fillna(0, inplace=True)
         
-    return final_df['unspliced_fraction']
+    return pd.DataFrame({'fraction_unspliced': final_df['fraction_unspliced']})
