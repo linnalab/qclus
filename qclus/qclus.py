@@ -29,20 +29,35 @@ def run_qclus(counts_path, fraction_unspliced,
 
     sc.settings.verbosity = 0
 
-    #initialize AnnData object
+    # Initialize AnnData object
     adata = sc.read_10x_h5(f"{counts_path}")
     adata.var_names_make_unique()
     adata.obs.index = create_new_index(adata.obs.index)
     adata_raw = adata.copy()
 
-    #add fraction_unspliced annotation from .loom file
-    adata.obs["fraction_unspliced"] = fraction_unspliced.loc[adata.obs.index]
+    # Filter adata and adata_raw to keep only cells that have corresponding splicing info
+    common_barcodes = adata.obs.index.intersection(fraction_unspliced.index)
+    if len(common_barcodes) < len(adata.obs.index):
+        print(f"Removing {len(adata.obs.index) - len(common_barcodes)} barcodes without splicing information.")
+
+    adata = adata[common_barcodes]
+    adata_raw = adata_raw[common_barcodes]
+
+    # Add fraction_unspliced annotation from the subset .loom file
+    adata.obs["fraction_unspliced"] = fraction_unspliced.loc[common_barcodes]
 
     #add cell type specific annotations from given gene sets
     for entry in gene_set_dict:
         adata.var[entry] = [True if x in gene_set_dict[entry] else False for x in adata.var.index]
         sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
         sc.tl.score_genes(adata, gene_list = gene_set_dict[entry], score_name = f"score_{entry}")
+
+    adata_raw.obs = adata.obs[["fraction_unspliced", "pct_counts_MT", "total_counts", "n_genes_by_counts"]]
+
+    #initial filter
+    adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
+    initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
+    adata = adata[adata.obs.initial_filter==False]
         
     #create nonCM annotations
     adata.obs["pct_counts_nonCM"] = adata.obs[['pct_counts_VEC', 
@@ -69,7 +84,6 @@ def run_qclus(counts_path, fraction_unspliced,
                                                 'score_MP']].max(1)
     
     #Annotate raw counts with some basic quality metrics
-    adata_raw.obs = adata.obs[["fraction_unspliced", "pct_counts_MT", "total_counts", "n_genes_by_counts"]]
 
     #calculate scrublet score for each cell
     if scrublet_filter:
@@ -90,15 +104,16 @@ def run_qclus(counts_path, fraction_unspliced,
     sc.pp.calculate_qc_metrics(adata, qc_vars=["nucl_30"], percent_top=None, log1p=False, inplace=True)
     sc.tl.score_genes(adata, gene_list = nucl_gene_set[:30], score_name = "score_nucl_30")
     
-    adata_raw.obsm["QClus"] = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
-
-    #initial filter
-    adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
-    initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
-    adata = adata[adata.obs.initial_filter==False]
+    cluster_embedding = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
+    adata_raw.uns["QClus"] = cluster_embedding  # Store the embedding in the unstructured data
 
     #perform unsupervised clustering with the created cell statistics
     adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:,clustering_features], k=clustering_k)
+
+    # add cluster results to adata_raw with the same index and missing values set to "initial filter"
+    adata_raw.obs["kmeans"] = "initial filter"
+    adata_raw.obs.loc[adata.obs.index, "kmeans"] = adata.obs.kmeans
+
     adata.obs["clustering_filter"] = [False if x in clusters_to_select else True for x in adata.obs.kmeans]
 
     #add filter annotations
