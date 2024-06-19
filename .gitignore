@@ -1,7 +1,7 @@
+.idea
 .ipynb_checkpoints
 build
 qclus/__pycache__
 qclus.egg-info
 tutorials/.ipynb_checkpoints
 .DS_Store
-.idea
