@@ -1,6 +1,11 @@
 pandas
-loompy
 scanpy
+python-igraph
+leidenalg
+loompy
 scikit-learn
+#python-annoy
 scrublet
 pysam
+jupyter
+jupyterlab
