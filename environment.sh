@@ -12,11 +12,19 @@ source activate qclus
 echo "Installing Conda packages..."
 conda install -c conda-forge scanpy python-igraph leidenalg loompy -y
 conda install -c conda-forge python-annoy -y
-conda install -c conda-forge jupyterlab  -y
-
+conda install -c conda-forge jupyterlab -y
 
 # Step 4: Install additional Python packages using pip
 echo "Installing Python packages using pip..."
 pip install .
 
-echo "Environment setup is complete."
+# Joke sequence
+echo "Fatal flaw detected."
+sleep 3  # Waits for 3 seconds
+echo "Attempting possible workaround."
+sleep 3  # Waits for 3 seconds
+echo "Consulting alien life forms."
+sleep 3  # Waits for 3 seconds
+echo "Solution identified."
+sleep 3  # Waits for 3 seconds
+echo "Installation complete. Environment setup successfully completed."
