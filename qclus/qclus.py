@@ -52,8 +52,8 @@ def run_qclus(counts_path, fraction_unspliced,
         sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
         sc.tl.score_genes(adata, gene_list = gene_set_dict[entry], score_name = f"score_{entry}")
 
-    adata_raw.obs = adata.obs[["fraction_unspliced", "pct_counts_MT", "total_counts", "n_genes_by_counts"]]
-
+    adata_raw.obs = adata.obs
+    
     #initial filter
     adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
     initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
