@@ -4,12 +4,12 @@ import scanpy as sc
 
 def run_qclus(counts_path, fraction_unspliced, 
                     gene_set_dict=celltype_gene_set_dict, 
-                    nucl_gene_set=nucl_genes_50, 
+                    nucl_gene_set=nuclear,
                     minimum_genes=500, 
                     maximum_genes=6000, 
                     max_mito_perc=40, 
                     clustering_features=['pct_counts_nonCM', 
-                                    'pct_counts_nucl_30', 
+                                    'pct_counts_nuclear',
                                     'pct_counts_MT', 
                                     'pct_counts_CM_cyto', 
                                     'pct_counts_CM_nucl', 
@@ -28,6 +28,8 @@ def run_qclus(counts_path, fraction_unspliced,
                     outlier_mito_diff=5):
 
     sc.settings.verbosity = 0
+
+    print('hi')
 
     # Initialize AnnData object
     adata = sc.read_10x_h5(f"{counts_path}")
@@ -50,7 +52,6 @@ def run_qclus(counts_path, fraction_unspliced,
     for entry in gene_set_dict:
         adata.var[entry] = [True if x in gene_set_dict[entry] else False for x in adata.var.index]
         sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
-        sc.tl.score_genes(adata, gene_list = gene_set_dict[entry], score_name = f"score_{entry}")
 
     adata_raw.obs = adata.obs
     
@@ -71,17 +72,7 @@ def run_qclus(counts_path, fraction_unspliced,
                                                 'pct_counts_L',  
                                                 'pct_counts_MESO',  
                                                 'pct_counts_MP']].max(1)
-    adata.obs["score_nonCM"] = adata.obs[['score_VEC', 
-                                                'score_PER',  
-                                                'score_SMC',  
-                                                'score_AD',  
-                                                'score_SC',  
-                                                'score_N',  
-                                                'score_EEC',  
-                                                'score_FB',  
-                                                'score_L',  
-                                                'score_MESO',  
-                                                'score_MP']].max(1)
+
     
     #Annotate raw counts with some basic quality metrics
 
@@ -100,12 +91,11 @@ def run_qclus(counts_path, fraction_unspliced,
     sc.pp.log1p(adata)
     
     #calculate nuclear score for each cell
-    adata.var["nucl_30"] = [True if x in nucl_gene_set[:30] else False for x in adata.var.index]
-    sc.pp.calculate_qc_metrics(adata, qc_vars=["nucl_30"], percent_top=None, log1p=False, inplace=True)
-    sc.tl.score_genes(adata, gene_list = nucl_gene_set[:30], score_name = "score_nucl_30")
-    
+    adata.var["nuclear"] = [True if x in nuclear else False for x in adata.var.index]
+    sc.pp.calculate_qc_metrics(adata, qc_vars=["nuclear"], percent_top=None, log1p=False, inplace=True)
+
     cluster_embedding = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
-    adata_raw.uns["QClus"] = cluster_embedding  # Store the embedding in the unstructured data
+    adata_raw.uns["QClus_umap"] = cluster_embedding  # Store the embedding in the unstructured data
 
     #perform unsupervised clustering with the created cell statistics
     adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:,clustering_features], k=clustering_k)
