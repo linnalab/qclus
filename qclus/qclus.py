@@ -29,8 +29,6 @@ def run_qclus(counts_path, fraction_unspliced,
 
     sc.settings.verbosity = 0
 
-    print('hi')
-
     # Initialize AnnData object
     adata = sc.read_10x_h5(f"{counts_path}")
     adata.var_names_make_unique()
