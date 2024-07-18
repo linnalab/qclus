@@ -3,8 +3,7 @@ from qclus.gene_lists import *
 import scanpy as sc
 
 def run_qclus(counts_path, fraction_unspliced, 
-                    gene_set_dict=celltype_gene_set_dict, 
-                    nucl_gene_set=nuclear,
+                    gene_set_dict=gene_set_dict,
                     minimum_genes=500, 
                     maximum_genes=6000, 
                     max_mito_perc=40, 
@@ -89,7 +88,7 @@ def run_qclus(counts_path, fraction_unspliced,
     sc.pp.log1p(adata)
     
     #calculate nuclear score for each cell
-    adata.var["nuclear"] = [True if x in nuclear else False for x in adata.var.index]
+    adata.var["nuclear"] = [True if x in gene_set_dict['nuclear'] else False for x in adata.var.index]
     sc.pp.calculate_qc_metrics(adata, qc_vars=["nuclear"], percent_top=None, log1p=False, inplace=True)
 
     cluster_embedding = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
