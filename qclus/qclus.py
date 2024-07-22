@@ -52,11 +52,6 @@ def run_qclus(counts_path, fraction_unspliced,
         sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
         sc.tl.score_genes(adata, gene_list = celltype_gene_set_dict[entry], score_name = f"score_{entry}")
 
-    #initial filter
-    adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
-    initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
-    adata = adata[adata.obs.initial_filter==False]
-        
     #create nonCM annotations
     adata.obs["pct_counts_nonCM"] = adata.obs[['pct_counts_VEC', 
                                                 'pct_counts_PER',  
@@ -69,19 +64,6 @@ def run_qclus(counts_path, fraction_unspliced,
                                                 'pct_counts_L',  
                                                 'pct_counts_MESO',  
                                                 'pct_counts_MP']].max(1)
-    adata.obs["score_nonCM"] = adata.obs[['score_VEC', 
-                                                'score_PER',  
-                                                'score_SMC',  
-                                                'score_AD',  
-                                                'score_SC',  
-                                                'score_N',  
-                                                'score_EEC',  
-                                                'score_FB',  
-                                                'score_L',  
-                                                'score_MESO',  
-                                                'score_MP']].max(1)
-    
-    #Annotate raw counts with some basic quality metrics
 
     #calculate scrublet score for each cell
     if scrublet_filter:
@@ -100,9 +82,13 @@ def run_qclus(counts_path, fraction_unspliced,
     #calculate nuclear score for each cell
     adata.var["nuclear"] = [True if x in nucl_gene_set else False for x in adata.var.index]
     sc.pp.calculate_qc_metrics(adata, qc_vars=["nuclear"], percent_top=None, log1p=False, inplace=True)
-    sc.tl.score_genes(adata, gene_list=nucl_gene_set, score_name=f"score_nuclear")
 
     adata_raw.obs = adata.obs
+
+    #initial filter
+    adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
+    initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
+    adata = adata[adata.obs.initial_filter==False]
 
     cluster_embedding = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
     adata_raw.uns["QClus_umap"] = cluster_embedding  # Store the embedding in the unstructured data
