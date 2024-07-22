@@ -4,7 +4,7 @@ import scanpy as sc
 
 def run_qclus(counts_path, fraction_unspliced,
                     nucl_gene_set=nucl_30,
-                    gene_set_dict=gene_set_dict,
+                    celltype_gene_set_dict=celltype_gene_set_dict,
                     minimum_genes=500, 
                     maximum_genes=6000, 
                     max_mito_perc=40, 
@@ -47,8 +47,8 @@ def run_qclus(counts_path, fraction_unspliced,
     adata.obs["fraction_unspliced"] = fraction_unspliced.loc[common_barcodes]
 
     #add cell type specific annotations from given gene sets
-    for entry in gene_set_dict:
-        adata.var[entry] = [True if x in gene_set_dict[entry] else False for x in adata.var.index]
+    for entry in celltype_gene_set_dict:
+        adata.var[entry] = [True if x in celltype_gene_set_dict[entry] else False for x in adata.var.index]
         sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
 
     #initial filter
