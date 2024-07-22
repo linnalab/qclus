@@ -51,8 +51,6 @@ def run_qclus(counts_path, fraction_unspliced,
         adata.var[entry] = [True if x in gene_set_dict[entry] else False for x in adata.var.index]
         sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
 
-    adata_raw.obs = adata.obs
-
     #initial filter
     adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
     initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
@@ -91,6 +89,8 @@ def run_qclus(counts_path, fraction_unspliced,
     #calculate nuclear score for each cell
     adata.var["nuclear"] = [True if x in nucl_gene_set else False for x in adata.var.index]
     sc.pp.calculate_qc_metrics(adata, qc_vars=["nuclear"], percent_top=None, log1p=False, inplace=True)
+
+    adata_raw.obs = adata.obs
 
     cluster_embedding = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
     adata_raw.uns["QClus_umap"] = cluster_embedding  # Store the embedding in the unstructured data
