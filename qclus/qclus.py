@@ -46,11 +46,11 @@ def run_qclus(counts_path, fraction_unspliced,
     # Add fraction_unspliced annotation from the subset .loom file
     adata.obs["fraction_unspliced"] = fraction_unspliced.loc[common_barcodes]
 
+    get_qc_metrics(adata, nucl_30, 'nuclear', normlog=True)
+
     #add cell type specific annotations from given gene sets
     for entry in celltype_gene_set_dict:
-        adata.var[entry] = [True if x in celltype_gene_set_dict[entry] else False for x in adata.var.index]
-        sc.pp.calculate_qc_metrics(adata, qc_vars=[entry], percent_top=None, log1p=False, inplace=True)
-        sc.tl.score_genes(adata, gene_list = celltype_gene_set_dict[entry], score_name = f"score_{entry}")
+        get_qc_metrics(adata, celltype_gene_set_dict[entry], entry)
 
     #create nonCM annotations
     adata.obs["pct_counts_nonCM"] = adata.obs[['pct_counts_VEC', 
@@ -65,24 +65,6 @@ def run_qclus(counts_path, fraction_unspliced,
                                                 'pct_counts_MESO',  
                                                 'pct_counts_MP']].max(1)
 
-    #calculate scrublet score for each cell
-    if scrublet_filter:
-        adata.obs['score_scrublet'] = calculate_scrublet(adata, 
-                                                         expected_rate=scrublet_expected_rate, 
-                                                         minimum_counts=scrublet_minimum_counts, 
-                                                         minimum_cells=scrublet_minimum_cells, 
-                                                         minimum_gene_variability_pctl=scrublet_minimum_gene_variability_pctl, 
-                                                         n_pcs=scrublet_n_pcs, 
-                                                         thresh=scrublet_thresh)
-    
-    #normalizeand logarithmize
-    sc.pp.normalize_total(adata, target_sum=1e4)
-    sc.pp.log1p(adata)
-    
-    #calculate nuclear score for each cell
-    adata.var["nuclear"] = [True if x in nucl_gene_set else False for x in adata.var.index]
-    sc.pp.calculate_qc_metrics(adata, qc_vars=["nuclear"], percent_top=None, log1p=False, inplace=True)
-
     adata_raw.obs = adata.obs
 
     #initial filter
@@ -90,6 +72,20 @@ def run_qclus(counts_path, fraction_unspliced,
     initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
     adata = adata[adata.obs.initial_filter==False]
 
+    #calculate scrublet score for each cell
+    if scrublet_filter:
+        adata.obs['score_scrublet'] = calculate_scrublet(adata,
+                                                         expected_rate=scrublet_expected_rate,
+                                                         minimum_counts=scrublet_minimum_counts,
+                                                         minimum_cells=scrublet_minimum_cells,
+                                                         minimum_gene_variability_pctl=scrublet_minimum_gene_variability_pctl,
+                                                         n_pcs=scrublet_n_pcs,
+                                                         thresh=scrublet_thresh)
+
+    #normalizeand logarithmize
+    sc.pp.normalize_total(adata, target_sum=1e4)
+    sc.pp.log1p(adata)
+    
     cluster_embedding = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
     adata_raw.uns["QClus_umap"] = cluster_embedding  # Store the embedding in the unstructured data
 
