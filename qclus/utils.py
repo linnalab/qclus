@@ -8,6 +8,30 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import os
 from umap import UMAP
+import scanpy as sc
+
+
+def get_qc_metrics(adata, gene_set, key_name, normlog=False, scale=False):
+    # Create a boolean mask for the genes in the gene_set
+    adata.var[key_name] = adata.var.index.isin(gene_set)
+
+    # Create a layer to store the modified data
+    adata.layers[key_name] = adata.X.copy()
+
+    # Use the new layer for normalization and scaling
+    if normlog:
+        sc.pp.normalize_total(adata, target_sum=1e4, layer=key_name)
+        sc.pp.log1p(adata, layer=key_name)
+
+    if scale:
+        sc.pp.scale(adata, max_value=10, layer=key_name)
+
+    # Calculate QC metrics on the specified layer
+    sc.pp.calculate_qc_metrics(adata, qc_vars=[key_name], percent_top=None, log1p=False, inplace=True, layer=key_name)
+    sc.tl.score_genes(adata, gene_list=gene_set, score_name=f"score_{key_name}")
+
+    # Remove the layer
+    del adata.layers[key_name]
 
 def add_qclus_embedding(adata, features, random_state=1, n_components=2):
     # Extract the features from the AnnData object
