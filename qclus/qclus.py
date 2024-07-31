@@ -1,31 +1,30 @@
 from qclus.utils import *
 from qclus.gene_lists import *
 import scanpy as sc
-
 def run_qclus(counts_path, fraction_unspliced,
                     nucl_gene_set=nucl_30,
                     celltype_gene_set_dict=celltype_gene_set_dict,
-                    minimum_genes=500, 
-                    maximum_genes=6000, 
-                    max_mito_perc=40, 
-                    clustering_features=['pct_counts_nonCM', 
-                                    'pct_counts_nuclear',
-                                    'pct_counts_MT', 
-                                    'pct_counts_CM_cyto', 
-                                    'pct_counts_CM_nucl', 
-                                    'fraction_unspliced'], 
-                    clustering_k=4, 
-                    clusters_to_select=["0", "1", "2"], 
+                    minimum_genes=500,  # increase results in more nuclei being filtered
+                    maximum_genes=6000,  # increase results in fewer nuclei being filtered
+                    max_mito_perc=40,  # increase results in fewer nuclei being filtered
+                    clustering_features=['pct_counts_nonCM',
+                                      'pct_counts_nuclear',
+                                      'pct_counts_MT',
+                                      'pct_counts_CM_cyto',
+                                      'pct_counts_CM_nucl',
+                                      'fraction_unspliced'],
+                    clustering_k=4,  # increase results in more nuclei being filtered
+                    clusters_to_select=["0", "1", "2"],  # increase results in fewer nuclei being filtered
                     scrublet_filter=True,
-                    scrublet_expected_rate=0.06, 
-                    scrublet_minimum_counts=2, 
-                    scrublet_minimum_cells=3, 
-                    scrublet_minimum_gene_variability_pctl=85, 
-                    scrublet_n_pcs=30, 
-                    scrublet_thresh=0.1, 
-                    outlier_filter=True, 
-                    outlier_unspliced_diff=0.1, 
-                    outlier_mito_diff=5):
+                    scrublet_expected_rate=0.06,
+                    scrublet_minimum_counts=2,
+                    scrublet_minimum_cells=3,
+                    scrublet_minimum_gene_variability_pctl=85,
+                    scrublet_n_pcs=30,
+                    scrublet_thresh=0.1,  # increase results in fewer nuclei being filtered
+                    outlier_filter=True,
+                    outlier_unspliced_diff=0.1,  # increase results in fewer nuclei being filtered
+                    outlier_mito_diff=5):  # increase results in fewer nuclei being filtered
 
     sc.settings.verbosity = 0
 
