@@ -1,6 +1,7 @@
 from qclus.utils import *
 from qclus.gene_lists import *
 import scanpy as sc
+
 def run_qclus(counts_path, fraction_unspliced,
                     nucl_gene_set=nucl_30,
                     celltype_gene_set_dict=celltype_gene_set_dict,
@@ -26,8 +27,6 @@ def run_qclus(counts_path, fraction_unspliced,
                     outlier_unspliced_diff=0.1,  # increase results in fewer nuclei being filtered
                     outlier_mito_diff=5):  # increase results in fewer nuclei being filtered
 
-    sc.settings.verbosity = 0
-
     # Initialize AnnData object
     adata = sc.read_10x_h5(f"{counts_path}")
     adata.var_names_make_unique()
@@ -45,7 +44,7 @@ def run_qclus(counts_path, fraction_unspliced,
     # Add fraction_unspliced annotation from the subset .loom file
     adata.obs["fraction_unspliced"] = fraction_unspliced.loc[common_barcodes]
 
-    get_qc_metrics(adata, nucl_30, 'nuclear', normlog=True)
+    get_qc_metrics(adata, nucl_gene_set, 'nuclear', normlog=True)
 
     #add cell type specific annotations from given gene sets
     for entry in celltype_gene_set_dict:
@@ -101,6 +100,7 @@ def run_qclus(counts_path, fraction_unspliced,
     #clustering filter
     clustering_filter_list = adata[adata.obs.clustering_filter==True].obs.index.to_list()
     adata = adata[adata.obs.clustering_filter==False]
+
     #outlier filter
     if outlier_filter:
         adata.obs["outlier_filter"] = annotate_outliers(adata.obs[["fraction_unspliced", "pct_counts_MT", "kmeans", "pct_counts_nonCM"]], unspliced_diff=outlier_unspliced_diff, mito_diff=outlier_mito_diff)
