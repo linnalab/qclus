@@ -48,15 +48,15 @@ You can find tutorials on how to use QClus in the `tutorials` directory. They ar
 
 In order to run QClus, you will need the 10X count matrix of your snRNA-seq data, as well as the unspliced values for each cell.
 
-### Case 1: You have the unspliced values already
+##### Case 1: You have the unspliced values already
 
 Great! Move directly to the qclus_tutorial.ipynb notebook.
 
-### Case 2: You don't have the unspliced values, but you have run Velocyto on your data and have the .loom file
+##### Case 2: You don't have the unspliced values, but you have run Velocyto on your data and have the .loom file
 
 We have a tutorial for you! Move to the splicing_from_loompy.ipynb notebook, which will show you how to get the unspliced values from the .loom file.
 
-### Case 3: You don't have the unspliced values, and you haven't run Velocyto on your data
+##### Case 3: You don't have the unspliced values, and you haven't run Velocyto on your data
 
 Not a problem! We have implemented our own method for calculating unspliced fraction directly from your 10X bam files! Move to the splicing_from_bam.ipynb notebook, which will show you how to get the unspliced values from the bam files.
 
