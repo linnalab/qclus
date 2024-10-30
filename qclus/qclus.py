@@ -1,123 +1,193 @@
 from qclus.utils import *
 from qclus.gene_lists import *
 import scanpy as sc
+from typing import List, Dict
 
-def run_qclus(counts_path, fraction_unspliced,
-                    nucl_gene_set=nucl_30,
-                    celltype_gene_set_dict=celltype_gene_set_dict,
-                    minimum_genes=500,  # increase results in more nuclei being filtered
-                    maximum_genes=6000,  # increase results in fewer nuclei being filtered
-                    max_mito_perc=40,  # increase results in fewer nuclei being filtered
-                    clustering_features=['pct_counts_nonCM',
-                                      'pct_counts_nuclear',
-                                      'pct_counts_MT',
-                                      'pct_counts_CM_cyto',
-                                      'pct_counts_CM_nucl',
-                                      'fraction_unspliced'],
-                    clustering_k=4,  # increase results in more nuclei being filtered
-                    clusters_to_select=["0", "1", "2"],  # increase results in fewer nuclei being filtered
-                    scrublet_filter=True,
-                    scrublet_expected_rate=0.06,
-                    scrublet_minimum_counts=2,
-                    scrublet_minimum_cells=3,
-                    scrublet_minimum_gene_variability_pctl=85,
-                    scrublet_n_pcs=30,
-                    scrublet_thresh=0.1,  # increase results in fewer nuclei being filtered
-                    outlier_filter=True,
-                    outlier_unspliced_diff=0.1,  # increase results in fewer nuclei being filtered
-                    outlier_mito_diff=5):  # increase results in fewer nuclei being filtered
+def run_qclus(
+    counts_path: str,
+    fraction_unspliced: pd.Series,
+    nucl_gene_set: List[str] = nucl_30,
+    celltype_gene_set_dict: Dict[str, List[str]] = celltype_gene_set_dict,
+    minimum_genes: int = 500,
+    maximum_genes: int = 6000,
+    max_mito_perc: float = 40.0,
+    clustering_features: List[str] = [
+        'pct_counts_nonCM',
+        'pct_counts_nuclear',
+        'pct_counts_MT',
+        'pct_counts_CM_cyto',
+        'pct_counts_CM_nucl',
+        'fraction_unspliced',
+    ],
+    clustering_k: int = 4,
+    clusters_to_select: List[str] = ["0", "1", "2"],
+    scrublet_filter: bool = True,
+    scrublet_expected_rate: float = 0.06,
+    scrublet_minimum_counts: int = 2,
+    scrublet_minimum_cells: int = 3,
+    scrublet_minimum_gene_variability_pctl: float = 85.0,
+    scrublet_n_pcs: int = 30,
+    scrublet_thresh: float = 0.1,
+    outlier_filter: bool = True,
+    outlier_unspliced_diff: float = 0.1,
+    outlier_mito_diff: float = 5.0,
+) -> sc.AnnData:
+    """
+    Run the QClus pipeline on single-cell RNA sequencing data.
 
+    Parameters:
+        counts_path (str): Path to the 10x Genomics counts .h5 file.
+        fraction_unspliced (pd.Series): Series containing the fraction of unspliced reads per cell.
+        nucl_gene_set (List[str], optional): List of nuclear genes for QC metrics.
+        celltype_gene_set_dict (Dict[str, List[str]], optional): Dictionary of cell type-specific gene sets.
+        minimum_genes (int, optional): Minimum number of genes expressed to pass initial filter.
+        maximum_genes (int, optional): Maximum number of genes expressed to pass initial filter.
+        max_mito_perc (float, optional): Maximum mitochondrial gene percentage to pass initial filter.
+        clustering_features (List[str], optional): List of features used for clustering.
+        clustering_k (int, optional): Number of clusters to use in k-means clustering.
+        clusters_to_select (List[str], optional): List of cluster labels to select (pass filtering).
+        scrublet_filter (bool, optional): Whether to perform doublet filtering using Scrublet.
+        scrublet_expected_rate (float, optional): Expected doublet rate for Scrublet.
+        scrublet_minimum_counts (int, optional): Minimum counts per cell for Scrublet.
+        scrublet_minimum_cells (int, optional): Minimum cells per gene for Scrublet.
+        scrublet_minimum_gene_variability_pctl (float, optional): Minimum gene variability percentile for Scrublet.
+        scrublet_n_pcs (int, optional): Number of principal components for Scrublet.
+        scrublet_thresh (float, optional): Threshold for Scrublet doublet calling.
+        outlier_filter (bool, optional): Whether to perform outlier filtering.
+        outlier_unspliced_diff (float, optional): Unspliced fraction difference threshold for outlier filtering.
+        outlier_mito_diff (float, optional): Mitochondrial percentage difference threshold for outlier filtering.
+
+    Returns:
+        sc.AnnData: AnnData object containing the raw data with QClus annotations.
+    """
     # Initialize AnnData object
-    adata = sc.read_10x_h5(f"{counts_path}")
+    if not os.path.exists(counts_path):
+        raise FileNotFoundError(f"The counts file '{counts_path}' does not exist.")
+
+    try:
+        adata = sc.read_10x_h5(counts_path)
+    except Exception as e:
+        raise IOError(f"Failed to read counts file at '{counts_path}': {e}")
+
     adata.var_names_make_unique()
     adata.obs.index = create_new_index(adata.obs.index)
     adata_raw = adata.copy()
 
     # Filter adata and adata_raw to keep only cells that have corresponding splicing info
     common_barcodes = adata.obs.index.intersection(fraction_unspliced.index)
+    if len(common_barcodes) == 0:
+        raise ValueError("No common barcodes found between counts data and fraction_unspliced.")
+
     if len(common_barcodes) < len(adata.obs.index):
         print(f"Removing {len(adata.obs.index) - len(common_barcodes)} barcodes without splicing information.")
 
     adata = adata[common_barcodes]
     adata_raw = adata_raw[common_barcodes]
 
-    # Add fraction_unspliced annotation from the subset .loom file
+    # Add fraction_unspliced annotation
     adata.obs["fraction_unspliced"] = fraction_unspliced.loc[common_barcodes]
 
+    # Calculate QC metrics
     get_qc_metrics(adata, nucl_gene_set, 'nuclear', normlog=True)
 
-    #add cell type specific annotations from given gene sets
+    # Add cell type-specific annotations from given gene sets
     for entry in celltype_gene_set_dict:
         get_qc_metrics(adata, celltype_gene_set_dict[entry], entry)
 
-    #create nonCM annotations
-    adata.obs["pct_counts_nonCM"] = adata.obs[['pct_counts_VEC', 
-                                                'pct_counts_PER',  
-                                                'pct_counts_SMC',  
-                                                'pct_counts_AD',  
-                                                'pct_counts_SC',  
-                                                'pct_counts_N',  
-                                                'pct_counts_EEC',  
-                                                'pct_counts_FB',  
-                                                'pct_counts_L',  
-                                                'pct_counts_MESO',  
-                                                'pct_counts_MP']].max(1)
+    # Create nonCM annotations
+    required_columns = [
+        'pct_counts_VEC',
+        'pct_counts_PER',
+        'pct_counts_SMC',
+        'pct_counts_AD',
+        'pct_counts_SC',
+        'pct_counts_N',
+        'pct_counts_EEC',
+        'pct_counts_FB',
+        'pct_counts_L',
+        'pct_counts_MESO',
+        'pct_counts_MP',
+    ]
+    missing_columns = [col for col in required_columns if col not in adata.obs.columns]
+    if missing_columns:
+        raise ValueError(f"The following required columns are missing in adata.obs: {missing_columns}")
 
-    adata_raw.obs = adata.obs
+    adata.obs["pct_counts_nonCM"] = adata.obs[required_columns].max(axis=1)
 
-    #initial filter
-    adata.obs["initial_filter"] = [False if maximum_genes >= x >= minimum_genes and y <= max_mito_perc else True for x,y in zip(adata.obs.n_genes_by_counts, adata.obs.pct_counts_MT)]
-    initial_filter_list = adata[adata.obs.initial_filter==True].obs.index.to_list()
-    adata = adata[adata.obs.initial_filter==False]
+    # Synchronize observations in raw data
+    adata_raw.obs = adata.obs.copy()
 
-    #calculate scrublet score for each cell
+    # Initial filter based on gene counts and mitochondrial percentage
+    adata.obs["initial_filter"] = (
+        (adata.obs['n_genes_by_counts'] < minimum_genes) |
+        (adata.obs['n_genes_by_counts'] > maximum_genes) |
+        (adata.obs['pct_counts_MT'] > max_mito_perc)
+    )
+    initial_filter_list = adata.obs.index[adata.obs.initial_filter].tolist()
+    adata = adata[~adata.obs.initial_filter]
+
+    # Calculate Scrublet scores
     if scrublet_filter:
-        adata.obs['score_scrublet'] = calculate_scrublet(adata,
-                                                         expected_rate=scrublet_expected_rate,
-                                                         minimum_counts=scrublet_minimum_counts,
-                                                         minimum_cells=scrublet_minimum_cells,
-                                                         minimum_gene_variability_pctl=scrublet_minimum_gene_variability_pctl,
-                                                         n_pcs=scrublet_n_pcs,
-                                                         thresh=scrublet_thresh)
+        adata.obs['score_scrublet'] = calculate_scrublet(
+            adata,
+            expected_rate=scrublet_expected_rate,
+            minimum_counts=scrublet_minimum_counts,
+            minimum_cells=scrublet_minimum_cells,
+            minimum_gene_variability_pctl=scrublet_minimum_gene_variability_pctl,
+            n_pcs=scrublet_n_pcs,
+            thresh=scrublet_thresh,
+        )
 
-    #normalizeand logarithmize
+    # Normalize and logarithmize
     sc.pp.normalize_total(adata, target_sum=1e4)
     sc.pp.log1p(adata)
-    
+
+    # Check if clustering features are available
+    missing_features = [feat for feat in clustering_features if feat not in adata.obs.columns]
+    if missing_features:
+        raise ValueError(f"The following clustering features are missing in adata.obs: {missing_features}")
+
+    # Add QClus embedding
     cluster_embedding = add_qclus_embedding(adata, clustering_features, random_state=1, n_components=2)
-    adata_raw.uns["QClus_umap"] = cluster_embedding  # Store the embedding in the unstructured data
+    adata_raw.uns["QClus_umap"] = cluster_embedding  # Store the embedding
 
-    #perform unsupervised clustering with the created cell statistics
-    adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:,clustering_features], k=clustering_k)
+    # Perform unsupervised clustering
+    adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:, clustering_features], k=clustering_k)
 
-    # add cluster results to adata_raw with the same index and missing values set to "initial filter"
+    # Add cluster results to adata_raw
     adata_raw.obs["kmeans"] = "initial filter"
     adata_raw.obs.loc[adata.obs.index, "kmeans"] = adata.obs.kmeans
 
-    adata.obs["clustering_filter"] = [False if x in clusters_to_select else True for x in adata.obs.kmeans]
+    # Clustering filter
+    adata.obs["clustering_filter"] = ~adata.obs.kmeans.isin(clusters_to_select)
+    clustering_filter_list = adata.obs.index[adata.obs.clustering_filter].tolist()
+    adata = adata[~adata.obs.clustering_filter]
 
-    #add filter annotations
-    #clustering filter
-    clustering_filter_list = adata[adata.obs.clustering_filter==True].obs.index.to_list()
-    adata = adata[adata.obs.clustering_filter==False]
-
-    #outlier filter
+    # Outlier filter
+    outlier_filter_list = []
     if outlier_filter:
-        adata.obs["outlier_filter"] = annotate_outliers(adata.obs[["fraction_unspliced", "pct_counts_MT", "kmeans", "pct_counts_nonCM"]], unspliced_diff=outlier_unspliced_diff, mito_diff=outlier_mito_diff)
-        outlier_filter_list = adata[adata.obs.outlier_filter==True].obs.index.to_list()
-        adata = adata[adata.obs.outlier_filter==False]
-    #doublet filter
+        adata.obs["outlier_filter"] = annotate_outliers(
+            adata.obs[["fraction_unspliced", "pct_counts_MT", "kmeans", "pct_counts_nonCM"]],
+            unspliced_diff=outlier_unspliced_diff,
+            mito_diff=outlier_mito_diff,
+        )
+        outlier_filter_list = adata.obs.index[adata.obs.outlier_filter].tolist()
+        adata = adata[~adata.obs.outlier_filter]
+
+    # Scrublet filter
+    scrublet_filter_list = []
     if scrublet_filter:
-        adata.obs["scrublet_filter"] = [False if x < scrublet_thresh else True for x in adata.obs.score_scrublet]
-        scrublet_filter_list = adata[adata.obs.scrublet_filter==True].obs.index.to_list()
-        adata = adata[adata.obs.scrublet_filter==False]
+        adata.obs["scrublet_filter"] = adata.obs.score_scrublet >= scrublet_thresh
+        scrublet_filter_list = adata.obs.index[adata.obs.scrublet_filter].tolist()
+        adata = adata[~adata.obs.scrublet_filter]
 
-    #annotate raw counts with the results of QClus
+    # Annotate raw counts with the results of QClus
     adata_raw.obs["qclus"] = "passed"
-
     adata_raw.obs.loc[initial_filter_list, "qclus"] = "initial filter"
     adata_raw.obs.loc[clustering_filter_list, "qclus"] = "clustering filter"
-    adata_raw.obs.loc[outlier_filter_list, "qclus"] = "outlier filter"
-    adata_raw.obs.loc[scrublet_filter_list, "qclus"] = "scrublet filter"
+    if outlier_filter_list:
+        adata_raw.obs.loc[outlier_filter_list, "qclus"] = "outlier filter"
+    if scrublet_filter_list:
+        adata_raw.obs.loc[scrublet_filter_list, "qclus"] = "scrublet filter"
 
     return adata_raw
