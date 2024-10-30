@@ -6,7 +6,6 @@ Additionally, while the method was originally developed for cardiac snRNA-seq da
 
 Any and all comments/criticisms/suggestions are enthusiastically received! :-)
 
----
 
 ## Table of Contents
 
@@ -15,7 +14,6 @@ Any and all comments/criticisms/suggestions are enthusiastically received! :-)
 - [Getting Started](#getting-started)
 - [If You Have Issues](#if-you-have-issues)
 
----
 
 ## Preprint
 
