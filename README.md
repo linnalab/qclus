@@ -1,6 +1,6 @@
 # QClus
 
-This is a novel nuclei filtering method targeted to streamline the processing of snRNA-seq samples. The algorithm uses various metrics to cluster nuclei and filter empty and highly contaminated droplets. This approach combined with other filtering steps enables for flexible, automated, and reliable cleaning of samples with varying number of nuclei, quality, and contamination levels. The robustness of this method has been validated on a large number of heterogeneous datasets, in terms of number of nuclei, overall quality, and contamination.
+This is a novel nuclei filtering method targeted to streamline the processing of snRNA-seq samples. The algorithm uses various metrics to cluster nuclei and filter empty and highly contaminated droplets. This approach combined with other filtering steps enables for flexible, automated, and reliable preprocessing of samples with varying number of nuclei, quality, and contamination levels. The robustness of this method has been validated on a large number of heterogeneous datasets, in terms of number of nuclei, overall quality, and contamination.
 
 Additionally, while the method was originally developed for cardiac snRNA-seq data, in our paper we show that given it's felxible design it can also be applied to other tissues. We will provide detailed tutorials for this process.
 
