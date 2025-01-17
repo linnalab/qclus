@@ -27,19 +27,31 @@ Note: In order to use our environment installation script, you need to have cond
 
 You can find tutorials on how to use QClus in the `tutorials` directory. They are written in Jupyter notebooks. 
 
-In order to run QClus, you will need the 10X count matrix of your snRNA-seq data, as well as the unspliced values for each cell.
+In order to run QClus, you will need two things:
+
+1. The 10X count matrix of your snRNA-seq data,`filtered.h5`
+2. The fraction of unspliced reads for each nucleus in the following format:
+
+|              | fraction_unspliced |
+|----------------------|---------------------|
+| AAACGCTCAGATACCT     | 0.259897           |
+| AAACCCAGTGAATGTA     | 0.774209           |
+| AAACGAACATTGACCA     | 0.526074           |
+| AAACCCAAGCAGCACA     | 0.832765           |
+| AAACGAATCCACAGGC     | 0.794653           |
+
 
 #### Case 1: You have the unspliced values already
 
-Great! Move directly to the qclus_tutorial.ipynb notebook.
+Great! Move directly to the [qclus_tutorial.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial.ipynb) .
 
-#### Case 2: You don't have the unspliced values, but you have run Velocyto on your data and have the .loom file
+#### Case 2: You don't have the unspliced values, but you have run [Velocyto](https://velocyto.org/) on your data and have the .loom file
 
-We have a tutorial for you! Move to the splicing_from_loompy.ipynb notebook, which will show you how to get the unspliced values from the .loom file.
+We have a tutorial for you! Move to the [splicing_from_loompy.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/splicing_from_loompy.ipynb), which will show you how to get the unspliced values from the .loom file.
 
 #### Case 3: You don't have the unspliced values, and you haven't run Velocyto on your data
 
-Not a problem! We have implemented our own method for calculating unspliced fraction directly from your 10X bam files! Move to the splicing_from_bam.ipynb notebook, which will show you how to get the unspliced values from the bam files.
+Not a problem! We have implemented our own method for calculating unspliced fraction directly from your 10X bam files! Move to the [splicing_from_bam.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/splicing_from_bam.ipynb), which will show you how to get the unspliced values from the bam files.
 
 ## How to cite
 
