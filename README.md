@@ -1,29 +1,10 @@
-# Robust and reliable preprocessing of snRNA-seq data using QClus
+# QClus
 
-This is a novel nuclei filtering method targeted to streamlien the processing of challenging snRNA-seq samples. Originally developed to process cardiac data, we use metrics such as splicing, mitochondrial gene expression, nuclear gene expression, and non-cardiomyocyte and cardiomyocyte marker gene expression to cluster nuclei and filter empty and highly contaminated droplets. This approach combined with other filtering steps enables for flexible, automated, and reliable cleaning of samples with varying number of nuclei, quality, and contamination levels. The robustness of this method has been validated on a large number of heterogeneous datasets, in terms of number of nuclei, overall quality, and contamination.
+This is a novel nuclei filtering method targeted to streamline the processing of snRNA-seq samples. The algorithm uses various metrics to cluster nuclei and filter empty and highly contaminated droplets. This approach combined with other filtering steps enables for flexible, automated, and reliable cleaning of samples with varying number of nuclei, quality, and contamination levels. The robustness of this method has been validated on a large number of heterogeneous datasets, in terms of number of nuclei, overall quality, and contamination.
 
-Additionally, while the method was originally developed for cardiac snRNA-seq data, in our forthcoming paper we show that given it's felxible design it can also be applied to other tissues. We will provide detailed tutorials for this process.
+Additionally, while the method was originally developed for cardiac snRNA-seq data, in our paper we show that given it's felxible design it can also be applied to other tissues. We will provide detailed tutorials for this process.
 
 Any and all comments/criticisms/suggestions are enthusiastically received! :-)
-
-
-## Table of Contents
-
-- [Preprint](#preprint)
-- [Installation](#installation)
-- [Getting Started](#getting-started)
-- [If You Have Issues](#if-you-have-issues)
-
-
-## Preprint
-
-You can find the current preprint for this method at the link below. Please cite this preprint if you use QClus in your research.
-
-https://www.biorxiv.org/content/10.1101/2022.10.21.513315v2
-
-Figure 2 from the preprint is shown below:
-
-![Optional Alt Text](figures/FIG2.png)
 
 ## Installation
 
@@ -31,7 +12,7 @@ In the future we will be adding QClus to PyPI,  making it available via pip inst
 
 Currently we recommend installing QClus from source. To do so, please follow the instructions below:
 
-Note: In order to use our environment installation script, you need to have conda (Anaconda/miniconda) installed on your machine. 
+Note: In order to use our environment installation script, you need to have conda ([Anaconda](https://docs.anaconda.com/anaconda/install/)/[Miniconda](https://docs.anaconda.com/miniconda/install/)) installed on your machine. 
 
 1. Clone this repository into a suitable location on your machine or server using the following command:
 
@@ -60,6 +41,16 @@ We have a tutorial for you! Move to the splicing_from_loompy.ipynb notebook, whi
 
 Not a problem! We have implemented our own method for calculating unspliced fraction directly from your 10X bam files! Move to the splicing_from_bam.ipynb notebook, which will show you how to get the unspliced values from the bam files.
 
+## How to cite
+
+We hope you find the QClus package useful for your research! If you do, please remember to cite [our paper in Nucleic Acids Research](https://doi.org/10.1093/nar/gkae1145):
+
+Eloi Schmauch, Johannes Ojanen, Kyriakitsa Galani, Juho Jalkanen, Kristiina Harju, Maija Hollmén, Hannu Kokki, Jarmo Gunn, Jari Halonen, Juha Hartikainen, Tuomas Kiviniemi, Pasi Tavi, Minna U Kaikkonen, Manolis Kellis, Suvi Linna-Kuosmanen, QClus: a droplet filtering algorithm for enhanced snRNA-seq data quality in challenging samples, Nucleic Acids Research, Volume 53, Issue 1, 13 January 2025, gkae1145, https://doi.org/10.1093/nar/gkae1145
+
+You can also find the latest preprint for this method [here](https://www.biorxiv.org/content/10.1101/2022.10.21.513315v2).
+
 ## If You Have Issues
 
 If you have any issues with the installation or running the tutorials, please open an issue on this repository. We will do our best to help you out as soon as possible!
+
+
