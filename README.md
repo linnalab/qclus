@@ -1,6 +1,6 @@
 # QClus
 
-This is a novel nuclei filtering method targeted to streamline the processing of snRNA-seq samples. The algorithm uses various metrics to cluster nuclei and filter empty and highly contaminated droplets. This approach combined with other filtering steps enables for flexible, automated, and reliable preprocessing of samples with varying number of nuclei, quality, and contamination levels. The robustness of this method has been validated on a large number of heterogeneous datasets, in terms of number of nuclei, overall quality, and contamination.
+This is a novel droplet filtering method targeted to streamline the processing of snRNA-seq samples. The algorithm uses various metrics to cluster nuclei and filter empty and highly contaminated droplets. This approach combined with other filtering steps enables for flexible, automated, and reliable preprocessing of samples with varying number of nuclei, quality, and contamination levels. The robustness of this method has been validated on a large number of heterogeneous datasets, in terms of number of nuclei, overall quality, and contamination.
 
 Additionally, while the method was originally developed for cardiac snRNA-seq data, in our paper we show that given it's felxible design it can also be applied to other tissues. We will provide detailed tutorials for this process.
 
@@ -29,8 +29,8 @@ You can find tutorials on how to use QClus in the `tutorials` directory. They ar
 
 In order to run QClus, you will need two things:
 
-1. The 10X count matrix of your snRNA-seq data,`filtered.h5`
-2. The fraction of unspliced reads for each nucleus in the following format:
+1. The .h5 count matrix of your snRNA-seq data, e.g. `counts.h5`
+2. The fraction of unspliced reads for each droplet, e.g. `fraction_unspliced.csv`. They should be in the following format:
 
 |              | fraction_unspliced |
 |----------------------|---------------------|
@@ -41,17 +41,31 @@ In order to run QClus, you will need two things:
 | AAACGAATCCACAGGC     | 0.794653           |
 
 
-#### Case 1: You have the unspliced values already
+### How to get the fraction of unspliced reads for each droplet
 
-Great! Move directly to the [qclus_tutorial.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial.ipynb) .
+Note: If you have these values already you can skip this step.
 
-#### Case 2: You don't have the unspliced values, but you have run [Velocyto](https://velocyto.org/) on your data and have the .loom file
+#### Option 1: From FASTQ processing
 
-We have a tutorial for you! Move to the [splicing_from_loompy.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/splicing_from_loompy.ipynb), which will show you how to get the unspliced values from the .loom file.
+Many raw data processing methods, such as [alevin-fry](https://alevin-fry.readthedocs.io/en/latest/) and [STARsolo](https://github.com/alexdobin/STAR/blob/master/docs/STARsolo.md) output splicing information automatically. They calculate spliced, unspliced, and ambiguous counts per cell per gene, from which you can easily calculate the total fraction for each droplet.
 
-#### Case 3: You don't have the unspliced values, and you haven't run Velocyto on your data
+#### Option 2: From [Velocyto](https://velocyto.org/) output (.loom file)
 
-Not a problem! We have implemented our own method for calculating unspliced fraction directly from your 10X bam files! Move to the [splicing_from_bam.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/splicing_from_bam.ipynb), which will show you how to get the unspliced values from the bam files.
+If you have previously run Velocyto for your data, we have a tutorial for you! Move to the [splicing_from_loompy.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/splicing_from_loompy.ipynb), which will show you how to get the unspliced values from the .loom file.
+
+#### Option 3: From 10X BAM files
+
+If you do not have the necessary values from the methods above, we have implemented our own method for calculating unspliced fraction directly from your 10X bam files! Move to the [splicing_from_bam.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/splicing_from_bam.ipynb), which will show you how to get the unspliced values from the bam files.
+
+### Running QClus
+
+From here it is a simple matter of running the `run_qclus` function:
+
+
+
+This will execute QClus with the same settings as in the original publication. For the exact parameters that can be modified to suit your needs, please see the `run_qclus` [documentation](https://github.com/linnalab/qclus/blob/main/qclus/qclus.py). 
+
+We provide also provide a [tutorial notebook](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial.ipynb) which shows how to run QClus as part of a simple Scanpy workflow and how to evaluate the results.
 
 ## How to cite
 
