@@ -1,5 +1,4 @@
 import loompy
-import pandas as pd
 import scrublet as scr
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
@@ -11,6 +10,83 @@ import scanpy as sc
 from typing import List, Optional
 import numpy as np
 from umap import UMAP
+from typing import Optional
+import pandas as pd
+from anndata import AnnData
+
+
+def filter_adata_by_barcodes(
+        adata: AnnData,
+        fraction_unspliced: pd.Series
+) -> Optional[AnnData]:
+    """
+    Filters an AnnData object to keep only cells that have corresponding splicing information available.
+    Adds the 'fraction_unspliced' annotation to the filtered AnnData object.
+
+    Parameters:
+        adata (AnnData): The input AnnData object.
+        fraction_unspliced (pd.Series): Series containing the fraction of unspliced reads per cell.
+
+    Returns:
+        AnnData: Filtered AnnData object with the 'fraction_unspliced' annotation.
+
+    Raises:
+        ValueError: If no common barcodes are found between counts data and fraction_unspliced.
+        Optional[AnnData]: None if no matching cells remain after filtering.
+    """
+    # Find common cell barcodes between the AnnData object and the `fraction_unspliced` series
+    common_barcodes = adata.obs.index.intersection(fraction_unspliced.index)
+
+    if len(common_barcodes) == 0:
+        raise ValueError("No common barcodes found between counts data and fraction_unspliced.")
+
+    if len(common_barcodes) < len(adata.obs.index):
+        print(f"Removing {len(adata.obs.index) - len(common_barcodes)} barcodes without splicing information.")
+
+    # Filter adata
+    adata = adata[common_barcodes]
+
+    # Add fraction_unspliced as an observation annotation
+    adata.obs["fraction_unspliced"] = fraction_unspliced.loc[common_barcodes]
+
+    return adata
+
+
+def read_count_file(file_path: str) -> AnnData:
+    """
+    Load a counts file as an AnnData object. Supports .h5 and .h5ad file formats.
+
+    Parameters:
+        file_path (str): Path to the counts file.
+
+    Returns:
+        AnnData: Loaded AnnData object.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file format is not supported.
+        IOError: If there is an error reading the file.
+    """
+    # print('Reading counts file')
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"The counts file '{file_path}' does not exist.")
+
+    try:
+        if file_path.endswith('.h5'):
+            adata = sc.read_10x_h5(file_path)
+        elif file_path.endswith('.h5ad'):
+            adata = sc.read_h5ad(file_path)
+        else:
+            raise ValueError(
+                f"Unsupported file format for '{file_path}'. Only .h5 and .h5ad are supported."
+            )
+    except Exception as e:
+        raise IOError(f"Failed to read counts file at '{file_path}': {e}")
+
+    # Ensure unique variable names
+    adata.var_names_make_unique()
+    return adata
+
 
 
 def get_qc_metrics(
@@ -227,24 +303,29 @@ def annotate_outliers(
     """
     Annotate outlier cells based on fraction_unspliced and pct_counts_MT.
 
+    The reference cluster is determined as the cluster with the highest mean
+    fraction_unspliced. Outlier thresholds are then computed from this cluster.
+
     Parameters:
-        df (pd.DataFrame): DataFrame containing 'fraction_unspliced', 'pct_counts_MT', 'kmeans', 'pct_counts_nonCM'.
-        unspliced_diff (float): Threshold for fraction_unspliced difference.
-        mito_diff (float): Threshold for pct_counts_MT difference.
+        df (pd.DataFrame): DataFrame containing 'fraction_unspliced', 'pct_counts_MT', and 'kmeans'.
+        unspliced_diff (float): Value to subtract from the 25th percentile of fraction_unspliced.
+        mito_diff (float): Value to add to the 75th percentile of pct_counts_MT.
 
     Returns:
-        pd.Series: Boolean Series indicating outlier cells.
+        pd.Series: Boolean Series indicating outlier cells (True means outlier).
     """
-    # Find cluster with highest mean pct_counts_nonCM
-    cluster_means = df.groupby('kmeans')['pct_counts_nonCM'].mean()
-    max_noncm_cluster = cluster_means.idxmax()
+    # Find the cluster with the highest mean fraction_unspliced
+    cluster_means = df.groupby('kmeans')['fraction_unspliced'].mean()
+    max_unspliced_cluster = cluster_means.idxmax()
 
-    # Reference quantiles from the cluster with highest pct_counts_nonCM
-    ref_cluster = df[df['kmeans'] == max_noncm_cluster]
+    # Use the selected cluster as the reference to calculate thresholds
+    ref_cluster = df[df['kmeans'] == max_unspliced_cluster]
     unspliced_threshold = ref_cluster['fraction_unspliced'].quantile(0.25) - unspliced_diff
     mito_threshold = ref_cluster['pct_counts_MT'].quantile(0.75) + mito_diff
 
-    # Annotate outliers
+    # Annotate cells as outliers:
+    # A cell is considered "good" (not an outlier) if its fraction_unspliced exceeds the threshold
+    # and its pct_counts_MT is below the threshold. We invert this logic for the outlier flag.
     is_outlier = ~(
         (df['fraction_unspliced'] > unspliced_threshold) &
         (df['pct_counts_MT'] < mito_threshold)

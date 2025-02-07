@@ -61,31 +61,14 @@ def run_qclus(
         sc.AnnData: AnnData object containing the raw data with QClus annotations.
     """
     # Initialize AnnData object
-    if not os.path.exists(counts_path):
-        raise FileNotFoundError(f"The counts file '{counts_path}' does not exist.")
+    adata = read_count_file(counts_path)
 
-    try:
-        adata = sc.read_10x_h5(counts_path)
-    except Exception as e:
-        raise IOError(f"Failed to read counts file at '{counts_path}': {e}")
-
-    adata.var_names_make_unique()
     adata.obs.index = create_new_index(adata.obs.index)
     adata_raw = adata.copy()
 
-    # Filter adata and adata_raw to keep only cells that have corresponding splicing info
-    common_barcodes = adata.obs.index.intersection(fraction_unspliced.index)
-    if len(common_barcodes) == 0:
-        raise ValueError("No common barcodes found between counts data and fraction_unspliced.")
-
-    if len(common_barcodes) < len(adata.obs.index):
-        print(f"Removing {len(adata.obs.index) - len(common_barcodes)} barcodes without splicing information.")
-
-    adata = adata[common_barcodes]
-    adata_raw = adata_raw[common_barcodes]
-
-    # Add fraction_unspliced annotation
-    adata.obs["fraction_unspliced"] = fraction_unspliced.loc[common_barcodes]
+    # Filter adata and adata_raw using new utility function
+    adata = filter_adata_by_barcodes(adata, fraction_unspliced)
+    adata_raw = filter_adata_by_barcodes(adata_raw, fraction_unspliced)
 
     # Calculate QC metrics
     get_qc_metrics(adata, nucl_gene_set, 'nuclear', normlog=True)
@@ -108,6 +91,7 @@ def run_qclus(
         'pct_counts_MESO',
         'pct_counts_MP',
     ]
+
     missing_columns = [col for col in required_columns if col not in adata.obs.columns]
     if missing_columns:
         raise ValueError(f"The following required columns are missing in adata.obs: {missing_columns}")
