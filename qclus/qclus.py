@@ -196,9 +196,11 @@ def quickstart_qclus(counts_path: str,
     :rtype: AnnData
     """
     if tissue == 'heart':
+        # Run the standard "heart" workflow
         adata = run_qclus(counts_path, fraction_unspliced)
 
-    if tissue == 'other':
+    elif tissue == 'other':
+        # Run the "other" tissue workflow with custom parameters
         adata = run_qclus(counts_path, fraction_unspliced,
                           clustering_features=['pct_counts_nuclear',
                                                'pct_counts_MT',
@@ -208,6 +210,7 @@ def quickstart_qclus(counts_path: str,
                           )
 
     else:
+        # Raise an error for any invalid tissue types
         raise ValueError(f"Invalid tissue: {tissue}. Please choose 'heart' or 'other'.")
 
     return adata

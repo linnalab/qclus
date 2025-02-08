@@ -63,9 +63,10 @@ From here you can run the `quickstart_qclus` function. For cardiac data, the fun
 
 ```python
 import qclus as qc
+import pandas as pd
 
 counts_path = 'path/to/your/count_matrix.h5ad'  
-fraction_unspliced = 'path/to/your/fraction_unspliced.csv'
+fraction_unspliced = pd.read_csv("path/to/your/fraction_unspliced.csv", index_col=0)
 
 adata = qc.quickstart_qclus(counts_path, 
                  fraction_unspliced, 
