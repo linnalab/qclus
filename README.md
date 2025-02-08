@@ -62,7 +62,12 @@ If you do not have the necessary values from the methods above, we have implemen
 From here you can run the `quickstart_qclus` function. For cardiac data, the function runs QClus with the same settings as in the original publication.
 
 ```python
-adata = quickstart_qclus(counts_path, 
+import qclus as qc
+
+counts_path = 'path/to/your/count_matrix.h5ad'  
+fraction_unspliced = 'path/to/your/fraction_unspliced.csv'
+
+adata = qc.quickstart_qclus(counts_path, 
                  fraction_unspliced, 
                  tissue = 'heart')
 ```
@@ -70,7 +75,7 @@ adata = quickstart_qclus(counts_path,
 For other tissues, you can use the following function:
 
 ```python
-adata = quickstart_qclus(counts_path, 
+adata = qc.quickstart_qclus(counts_path, 
                  fraction_unspliced, 
                  tissue = 'other')
 ```
