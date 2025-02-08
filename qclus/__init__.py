@@ -1,1 +1,1 @@
-from .qclus import run_qclus
+from .qclus import run_qclus, quickstart_qclus

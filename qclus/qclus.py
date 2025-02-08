@@ -61,6 +61,7 @@ def run_qclus(
         sc.AnnData: AnnData object containing the raw data with QClus annotations.
     """
     # Initialize AnnData object
+
     adata = read_count_file(counts_path)
 
     adata.obs.index = create_new_index(adata.obs.index)
