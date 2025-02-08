@@ -2,11 +2,9 @@
 
 nucl_30 = ['MALAT1', 'NEAT1', 'FTX', 'FOXP1', 'RBMS3', 'ZBTB20', 'LRMDA', 'PBX1', 'ITPR2', 'AUTS2', 'TTC28', 'BNC2', 'EXOC4', 'RORA', 'PRKG1', 'ARID1B', 'PARD3B', 'GPHN', 'N4BP2L2', 'PKHD1L1', 'EXOC6B', 'FBXL7', 'MED13L', 'TBC1D5', 'IMMP2L', 'SYNE1', 'RERE', 'MBD5', 'EXT1', 'WWOX']
 
+MT_genes = ['MT-ND1', 'MT-ND2', 'MT-CO1', 'MT-CO2', 'MT-ATP8', 'MT-ATP6', 'MT-CO3', 'MT-ND3', 'MT-ND4L', 'MT-ND4', 'MT-ND5', 'MT-ND6', 'MT-CYB']
+
 celltype_gene_set_dict = {
-"MT" : ['MT-ND1', 'MT-ND2', 'MT-CO1', 'MT-CO2', 'MT-ATP8', 'MT-ATP6', 'MT-CO3', 'MT-ND3', 'MT-ND4L', 'MT-ND4', 'MT-ND5', 'MT-ND6', 'MT-CYB'],
-"MT_nucl" : ["POLG", "POLG2", "TWNK", "SSBP1", "PRIMPOL", "DNA2", "MGME1", "RNASEH1", "POLRMT", "TFAM", "TEFM", "TFB2M", "TK2", "DGUOK", "RRM2B", "TYMP", "SLC25A4", "OPA1", "MFN1", "MFN2", "DNM1L", "MFF", "FIS1", "MPV17", "SPG7"], 
-"CM_cyto" : ["TTN", "RYR2", "PAM", "TNNT2", "RABGAP1L", "PDLIM5", "MYL7", "MYH6"],
-"CM_nucl" : ["RBM20", "TECRL", "MLIP", "CHRM2", "TRDN", "PALLD", "SGCD", "CMYA5", "MYOM2", "TBX5", "ESRRG", "LINC02248", "KCNJ3", "TACC2", "CORIN", "DPY19L2", "WNK2", "MITF", "OBSCN", "FHOD3", "MYLK3", "DAPK2", "NEXN"],
 "VEC" : ["VWF", "ERG", "ANO2", "PTPRB", "EGFL7", "PREX2", "ADGRL4", "FLT1", "CYYR1", "GRB10", "PPP1R16B", "DOCK9", "SHANK3", "PECAM1", "PLEKHG1", "EMCN"],
 "PER" : ["RGS5", "DACH1", "GUCY1A1", "ABCC9", "BGN", "NOTCH3", "PDGFRB", "FRMD3", "RNF152", "CCDC102B", "NGF"],
 "SMC" : ["MYH11", "KCNAB1", "NTRK3", "CHRM3", "ACTA2", "RGS6", "DGKG", "ITGA8", "TBX2", "LMOD1", "SDK1", "GPC6", "ANTXR1", "FLNA", "CLMN", "ATP10A", "MCAM", "TAGLN", "CCDC3"],
@@ -19,3 +17,9 @@ celltype_gene_set_dict = {
 "MESO" : ["C3", "SULF1", "AP000561.1", "PRG4", "GPM6A", "CDON", "DPP6", "CCDC80", "EZR", "FOS", "BNC1", "AC245041.2", "PRKD1", "CYSTM1", "TLL1", "WT1"],
 "MP" : ["TBXAS1", "SLC9A9", "MRC1", "MS4A6A", "RBM47", "DOCK2", "MCTP1", "SYK", "MSR1", "ATP8B4", "F13A1", "CD74", "MS4A4E", "ADAP2"]
 }
+
+CM_gene_set_dict = {
+"CM_cyto" : ["TTN", "RYR2", "PAM", "TNNT2", "RABGAP1L", "PDLIM5", "MYL7", "MYH6"],
+"CM_nucl" : ["RBM20", "TECRL", "MLIP", "CHRM2", "TRDN", "PALLD", "SGCD", "CMYA5", "MYOM2", "TBX5", "ESRRG", "LINC02248", "KCNJ3", "TACC2", "CORIN", "DPY19L2", "WNK2", "MITF", "OBSCN", "FHOD3", "MYLK3", "DAPK2", "NEXN"],
+}
+

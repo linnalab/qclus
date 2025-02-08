@@ -67,36 +67,32 @@ def run_qclus(
     adata_raw = adata.copy()
 
     # Filter adata and adata_raw using new utility function
-    adata = filter_adata_by_barcodes(adata, fraction_unspliced)
-    adata_raw = filter_adata_by_barcodes(adata_raw, fraction_unspliced)
+    adata = add_fraction_unspliced(adata, fraction_unspliced)
+    adata_raw = add_fraction_unspliced(adata_raw, fraction_unspliced)
 
     # Calculate QC metrics
     get_qc_metrics(adata, nucl_gene_set, 'nuclear', normlog=True)
 
-    # Add cell type-specific annotations from given gene sets
-    for entry in celltype_gene_set_dict:
-        get_qc_metrics(adata, celltype_gene_set_dict[entry], entry)
+    get_qc_metrics(adata, MT_genes, 'MT')
 
-    # Create nonCM annotations
-    required_columns = [
-        'pct_counts_VEC',
-        'pct_counts_PER',
-        'pct_counts_SMC',
-        'pct_counts_AD',
-        'pct_counts_SC',
-        'pct_counts_N',
-        'pct_counts_EEC',
-        'pct_counts_FB',
-        'pct_counts_L',
-        'pct_counts_MESO',
-        'pct_counts_MP',
-    ]
+    # Add CM-specific annotations if included in clustering features
+    if 'pct_counts_CM_cyto' in clustering_features and 'pct_counts_CM_nucl' in clustering_features:
+        for entry in CM_gene_set_dict:
+            get_qc_metrics(adata, CM_gene_set_dict[entry], entry)
 
-    missing_columns = [col for col in required_columns if col not in adata.obs.columns]
-    if missing_columns:
-        raise ValueError(f"The following required columns are missing in adata.obs: {missing_columns}")
+    if 'pct_counts_nonCM' in clustering_features:
+        # Add cell type-specific annotations from given gene sets
+        for entry in celltype_gene_set_dict:
+            get_qc_metrics(adata, celltype_gene_set_dict[entry], entry)
 
-    adata.obs["pct_counts_nonCM"] = adata.obs[required_columns].max(axis=1)
+        # Create nonCM annotations
+        ct_spec_columns = ['pct_counts_' + ct for ct in celltype_gene_set_dict.keys()]
+
+        missing_columns = [col for col in ct_spec_columns if col not in adata.obs.columns]
+        if missing_columns:
+            raise ValueError(f"The following required columns are missing in adata.obs: {missing_columns}")
+
+        adata.obs["pct_counts_nonCM"] = adata.obs[ct_spec_columns].max(axis=1)
 
     # Synchronize observations in raw data
     adata_raw.obs = adata.obs.copy()
@@ -151,7 +147,7 @@ def run_qclus(
     outlier_filter_list = []
     if outlier_filter:
         adata.obs["outlier_filter"] = annotate_outliers(
-            adata.obs[["fraction_unspliced", "pct_counts_MT", "kmeans", "pct_counts_nonCM"]],
+            adata.obs[["fraction_unspliced", "pct_counts_MT", "kmeans"]],
             unspliced_diff=outlier_unspliced_diff,
             mito_diff=outlier_mito_diff,
         )

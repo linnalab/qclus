@@ -15,7 +15,7 @@ import pandas as pd
 from anndata import AnnData
 
 
-def filter_adata_by_barcodes(
+def add_fraction_unspliced(
         adata: AnnData,
         fraction_unspliced: pd.Series
 ) -> Optional[AnnData]:
