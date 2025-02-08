@@ -29,7 +29,7 @@ You can find tutorials on how to use QClus in the `tutorials` directory. They ar
 
 In order to run QClus, you will need two things:
 
-1. The .h5 count matrix of your snRNA-seq data, e.g. `counts.h5`
+1. The path to your count matrix of your droplets (can be provided as .h5 or .h5ad). In our benchmarking we begin with the filtered 10X output, but in principle the unfiltered output can also be used.
 2. The fraction of unspliced reads for each droplet, e.g. `fraction_unspliced.csv`. They should be in the following format:
 
 |              | fraction_unspliced |
