@@ -65,7 +65,7 @@ From here it is a simple matter of running the `run_qclus` function:
 
 This will execute QClus with the same settings as in the original publication. For the exact parameters that can be modified to suit your needs, please see the `run_qclus` [documentation](https://github.com/linnalab/qclus/blob/main/qclus/qclus.py). 
 
-We provide also provide a [tutorial notebook](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial.ipynb) which shows how to run QClus as part of a simple Scanpy workflow and how to evaluate the results.
+We provide also provide tutorial notebooks ([heart](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial_heart.ipynb) and [brain](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial_brain.ipynb)) which shows how to run QClus as part of a simple Scanpy workflow and how to evaluate the results.
 
 ## How to cite
 
