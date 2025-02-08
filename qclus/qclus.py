@@ -119,8 +119,8 @@ def run_qclus(
         )
 
     # Normalize and logarithmize
-    sc.pp.normalize_total(adata, target_sum=1e4)
-    sc.pp.log1p(adata)
+    # sc.pp.normalize_total(adata, target_sum=1e4)
+    # sc.pp.log1p(adata)
 
     # Check if clustering features are available
     missing_features = [feat for feat in clustering_features if feat not in adata.obs.columns]
