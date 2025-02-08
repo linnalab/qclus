@@ -57,13 +57,28 @@ If you have previously run Velocyto for your data, we have a tutorial for you! M
 
 If you do not have the necessary values from the methods above, we have implemented our own method for calculating unspliced fraction directly from your 10X bam files! Move to the [splicing_from_bam.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/splicing_from_bam.ipynb), which will show you how to get the unspliced values from the bam files.
 
-### Running QClus
+### QClus quickstart
 
-From here it is a simple matter of running the `run_qclus` function:
+From here you can run the `quickstart_qclus` function. For cardiac data, the function runs QClus with the same settings as in the original publication.
+
+```python
+quickstart_qclus(counts_path, 
+                 fraction_unspliced, 
+                 tissue = 'heart')
+```
+
+For other tissues, you can use the following function:
+
+```python
+quickstart_qclus(counts_path, 
+                 fraction_unspliced, 
+                 tissue = 'other')
+```
+
+This executes QClus without cell type specific metrics. For fine-tuning non-cardiac data, you can check the tutorials below.
 
 
-
-This will execute QClus with the same settings as in the original publication. For the exact parameters that can be modified to suit your needs, please see the `run_qclus` [documentation](https://github.com/linnalab/qclus/blob/main/qclus/qclus.py). 
+### Running QClus in a Scanpy workflow
 
 We provide also provide tutorial notebooks ([heart](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial_heart.ipynb) and [brain](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial_brain.ipynb)) which shows how to run QClus as part of a simple Scanpy workflow and how to evaluate the results.
 

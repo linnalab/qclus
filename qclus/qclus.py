@@ -171,3 +171,42 @@ def run_qclus(
         adata_raw.obs.loc[scrublet_filter_list, "qclus"] = "scrublet filter"
 
     return adata_raw
+
+
+def quickstart_qclus(counts_path: str,
+                     fraction_unspliced: pd.Series,
+                     tissue: str = 'heart'):
+    """
+    A function that performs quick clustering based on the specified tissue type.
+    The function processes single-cell RNA sequencing data to identify specific
+    clusters of interest, accommodating different clustering workflows by tissue type.
+    If the tissue is "heart", it runs a standard protocol, while for other tissues,
+    custom parameters can be applied. The function raises a ValueError if an invalid
+    tissue type is specified.
+
+    :param counts_path: Path to the count matrix used as input data.
+    :type counts_path: str
+    :param fraction_unspliced: A Series representing the fraction of unspliced RNA values for each cell/sample.
+    :type fraction_unspliced: pd.Series
+    :param tissue: The type of tissue to analyze, which determines the clustering workflow. Default is 'heart'.
+    :type tissue: str
+
+    :return: An AnnData object that contains the results of the clustering.
+    :rtype: AnnData
+    """
+    if tissue == 'heart':
+        adata = run_qclus(counts_path, fraction_unspliced)
+
+    if tissue == 'other':
+        adata = run_qclus(counts_path, fraction_unspliced,
+                          clustering_features=['pct_counts_nuclear',
+                                               'pct_counts_MT',
+                                               'fraction_unspliced'],
+                          clustering_k=3,
+                          clusters_to_select=["0", "1"],
+                          )
+
+    else:
+        raise ValueError(f"Invalid tissue: {tissue}. Please choose 'heart' or 'other'.")
+
+    return adata
