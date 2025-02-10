@@ -20,7 +20,7 @@ Note: In order to use our environment installation script, you need to have cond
     
 2. In the root directory of the package, run the following command to create an environment named ```qclus``` and install the required packages:
 
-    ```./environment.sh```
+    ``` bash environment.sh```
 
 
 ## Getting Started
