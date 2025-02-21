@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e # Exits immediately if a command exits with a non-zero status
 
 # Step 1: Create the Conda environment
 echo "Creating the Conda environment..."
