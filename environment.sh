@@ -19,13 +19,4 @@ conda install -c conda-forge jupyterlab -y
 echo "Installing Python packages using pip..."
 pip install .
 
-# Joke sequence
-echo "Fatal flaw detected."
-sleep 3  # Waits for 3 seconds
-echo "Attempting possible workaround."
-sleep 3  # Waits for 3 seconds
-echo "Consulting alien life forms."
-sleep 3  # Waits for 3 seconds
-echo "Solution identified."
-sleep 3  # Waits for 3 seconds
 echo "Installation complete. Environment setup successfully completed."
