@@ -387,8 +387,8 @@ def parse_bam_tags(
 
 def fraction_unspliced_from_bam(
     bam_path: Optional[str] = None,
-    bam_index: Optional[str] = None,
-    barcodes: Optional[List[str]] = None,
+    bam_index_path: Optional[str] = None,
+    barcodes_path: Optional[str] = None,
     regions: Optional[List[tuple]] = None,
     tiles: int = 100,
     cores: Optional[int] = None,
@@ -402,8 +402,8 @@ def fraction_unspliced_from_bam(
 
     Parameters:
         bam_path (str, optional): Path to the BAM file.
-        bam_index (str, optional): Path to the BAM index file.
-        barcodes (List[str], optional): List of cell barcodes.
+        bam_index_path (str, optional): Path to the BAM index file.
+        barcodes_path (str, optional): Path to cell barcodes.
         regions (List[tuple], optional): List of genomic intervals to process.
         tiles (int, optional): Number of genomic regions to process in parallel.
         cores (int, optional): Number of CPU cores to use.
@@ -415,19 +415,22 @@ def fraction_unspliced_from_bam(
     Returns:
         Optional[pd.DataFrame]: DataFrame containing the fraction of unspliced reads per cell.
     """
-    if bam_path is None or bam_index is None or barcodes is None:
-        raise ValueError("Please provide bam_path, bam_index, and barcodes.")
+    if bam_path is None or bam_index_path is None or barcodes_path is None:
+        raise ValueError("Please provide bam_path, bam_index_path, and barcodes.")
 
     if not os.path.exists(bam_path):
         raise FileNotFoundError(f"The BAM file '{bam_path}' does not exist.")
 
-    if not os.path.exists(bam_index):
-        raise FileNotFoundError(f"The BAM index file '{bam_index}' does not exist.")
+    if not os.path.exists(bam_index_path):
+        raise FileNotFoundError(f"The BAM index file '{bam_index_path}' does not exist.")
 
     # Remove any suffixes from barcodes
-    barcodes = [barcode.split("-")[0] for barcode in barcodes]
+    barcode_df = pd.read_csv(barcodes_path, 
+                           header=None, 
+                           sep="\t")
+    barcodes = barcode_df[0].tolist()
 
-    bam_file = pysam.AlignmentFile(bam_path, "rb", index_filename=bam_index)
+    bam_file = pysam.AlignmentFile(bam_path, "rb", index_filename=bam_index_path)
     if cores is None:
         cores = max(1, os.cpu_count() - 1)
 
@@ -462,12 +465,13 @@ def fraction_unspliced_from_bam(
             if result is not None:
                 results.append(result)
 
-    if not results:
-        return None
-
     final_df = pd.concat(results).groupby(level=0).sum()
     total_counts = final_df[INTRON_tag] + final_df[EXON_tag]
     final_df['fraction_unspliced'] = final_df[INTRON_tag] / total_counts
     final_df['fraction_unspliced'].fillna(0, inplace=True)
+
+    final_df.index.name = None
+    final_df.columns.name = None
+    final_df.index = [index.split('-')[0] for index in final_df.index]
 
     return final_df[['fraction_unspliced']]
