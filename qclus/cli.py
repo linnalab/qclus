@@ -321,7 +321,8 @@ def bam_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> in
         inputs["--bam-index"] = args.bam_index
     else:
         # The index that pysam finds next to the BAM file is an input too, and is protected like one
-        for candidate in (args.bam + ".bai", args.bam + ".csi", os.path.splitext(args.bam)[0] + ".bai"):
+        stem = os.path.splitext(args.bam)[0]
+        for candidate in (args.bam + ".bai", args.bam + ".csi", stem + ".bai", stem + ".csi"):
             if os.path.isfile(candidate):
                 inputs[f"the index of --bam ({os.path.basename(candidate)})"] = candidate
     check_paths(parser, inputs, {"--output": args.output}, args.overwrite)

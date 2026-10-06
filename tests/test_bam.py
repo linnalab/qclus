@@ -146,16 +146,27 @@ def test_command_line(bam, tmp_path, capsys):
     assert exit_info.value.code == 2
 
 
-def test_command_line_protects_the_index_it_finds(bam, capsys):
+@pytest.mark.parametrize("suffix", [".bam.bai", ".bai", ".bam.csi", ".csi"])
+def test_command_line_protects_the_index_it_finds(bam, tmp_path, capsys, suffix):
     from qclus.cli import main
 
     bam_path, barcodes_path = bam
-    index = bam_path + ".bai"
-    before = open(index, "rb").read()
+    copy = tmp_path / "sample.bam"
+    copy.write_bytes(open(bam_path, "rb").read())
+    index = tmp_path / ("sample" + suffix)
+    if suffix.endswith(".csi"):
+        pysam.index("-c", str(copy), str(index))
+    else:
+        pysam.index(str(copy), str(index))
+    before = index.read_bytes()
+
+    # Each of these names is one that pysam finds by itself, so the reader does use the file
+    with pysam.AlignmentFile(str(copy), "rb") as handle:
+        assert handle.has_index()
 
     with pytest.raises(SystemExit) as exit_info:
-        main(["splicing-from-bam", "--bam", bam_path, "--barcodes", barcodes_path, "-o", index, "--overwrite", "--cores", "1"])
+        main(["splicing-from-bam", "--bam", str(copy), "--barcodes", barcodes_path, "-o", str(index), "--overwrite", "--cores", "1"])
 
     assert exit_info.value.code == 2
     assert "inputs are never overwritten" in capsys.readouterr().err
-    assert open(index, "rb").read() == before
+    assert index.read_bytes() == before
