@@ -54,3 +54,18 @@ def test_cell_ids_without_a_sample_prefix(tmp_path, counts):
 def test_missing_loom_file(tmp_path):
     with pytest.raises(FileNotFoundError):
         utils.fraction_unspliced_from_loom(str(tmp_path / "missing.loom"))
+
+
+def test_command_line_output_can_be_read_by_the_pipeline(tmp_path, counts):
+    import pandas as pd
+
+    from qclus.cli import main
+
+    barcodes = make_barcodes(7)
+    path, output = tmp_path / "sample.loom", tmp_path / "fraction_unspliced.csv"
+    write_loom(path, [f"sample:{barcode}x" for barcode in barcodes], *counts)
+
+    assert main(["splicing-from-loom", "--loom", str(path), "-o", str(output)]) == 0
+
+    prepared = utils.prepare_fraction_unspliced(pd.read_csv(output, index_col=0))
+    assert list(prepared.index) == barcodes

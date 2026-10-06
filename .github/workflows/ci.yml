@@ -50,9 +50,11 @@ jobs:
             echo "Unexpected files in the wheel (listed above)."
             exit 1
           fi
-      - name: Install the wheel and import it outside the checkout
+      - name: Install the wheel and use it outside the checkout
         run: |
           uv venv --python 3.12 "$RUNNER_TEMP/wheel-env"
           uv pip install --python "$RUNNER_TEMP/wheel-env/bin/python" dist/*.whl
           cd "$RUNNER_TEMP"
           wheel-env/bin/python -c "import qclus; print(qclus.__version__)"
+          wheel-env/bin/qclus --version
+          wheel-env/bin/python -m qclus --help

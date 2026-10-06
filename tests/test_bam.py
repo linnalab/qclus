@@ -127,3 +127,20 @@ def test_invalid_arguments(bam, tmp_path):
         utils.fraction_unspliced_from_bam(
             bam_path=bam_path, bam_index_path=str(tmp_path / "missing.bai"), barcodes_path=barcodes_path
         )
+
+
+def test_command_line(bam, tmp_path, capsys):
+    from qclus.cli import main
+
+    bam_path, barcodes_path = bam
+    output = tmp_path / "fraction_unspliced.csv"
+    arguments = ["splicing-from-bam", "--bam", bam_path, "--barcodes", barcodes_path, "-o", str(output), "--tiles", "10", "--cores", "1"]
+
+    assert main(arguments) == 0
+    written = pd.read_csv(output, index_col=0)
+    assert written.loc[name(SPANNING), "fraction_unspliced"] == pytest.approx(2 / 3)
+    assert capsys.readouterr().out.strip() == f"barcodes\t{len(LISTED)}"
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(arguments)
+    assert exit_info.value.code == 2

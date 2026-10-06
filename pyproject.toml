@@ -44,6 +44,9 @@ dependencies = [
 tutorials = ["igraph", "jupyterlab", "leidenalg", "matplotlib"]
 test = ["pytest>=8"]
 
+[project.scripts]
+qclus = "qclus.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/linnalab/qclus"
 Issues = "https://github.com/linnalab/qclus/issues"
