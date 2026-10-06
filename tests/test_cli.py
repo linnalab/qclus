@@ -1,6 +1,7 @@
 import argparse
 import inspect
 import json
+import os
 import subprocess
 import sys
 
@@ -173,6 +174,26 @@ def test_outputs_must_differ(inputs, tmp_path, capsys):
 def test_an_input_is_never_overwritten(inputs, dataset, capsys):
     message = usage_error(inputs + ["-o", dataset.counts_path, "--overwrite"], capsys)
     assert "inputs are never overwritten" in message
+
+
+def test_a_hard_link_to_an_input_is_recognised(inputs, tmp_path, capsys):
+    table = inputs[4]
+    link = tmp_path / "link_to_the_table.csv"
+    os.link(table, link)
+    before = open(table).read()
+
+    message = usage_error(inputs + ["--obs-csv", str(link), "--overwrite"], capsys)
+
+    assert "inputs are never overwritten" in message
+    assert open(table).read() == before
+
+
+def test_an_output_cannot_be_a_directory(inputs, tmp_path, capsys):
+    directory = tmp_path / "results"
+    directory.mkdir()
+    arguments = inputs + ["-o", str(directory), "--obs-csv", str(tmp_path / "result.csv"), "--overwrite"]
+    assert "is a directory" in usage_error(arguments, capsys)
+    assert not (tmp_path / "result.csv").exists()
 
 
 def test_missing_input_and_missing_directory(inputs, tmp_path, capsys):

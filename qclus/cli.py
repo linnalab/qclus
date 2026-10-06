@@ -73,8 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     run.add_argument(
         "--tissue", choices=sorted(TISSUE_PRESETS), default="heart",
-        help="Workflow preset. 'heart' reproduces the published settings; 'other' leaves out the cell type "
-             "specific metrics. Default: heart.",
+        help="Workflow preset. 'heart' uses the clustering settings of the publication; 'other' leaves out the "
+             "cell type specific metrics. Default: heart.",
     )
 
     # One option per argument of run_qclus. None has a default here: what is not given comes from --tissue,
@@ -214,23 +214,34 @@ def pipeline_options(args: argparse.Namespace) -> dict:
     return {name: getattr(args, name) for name in names if hasattr(args, name)}
 
 
+def same_file(first: str, second: str) -> bool:
+    """Whether two paths lead to the same file, also through symbolic or hard links."""
+    if os.path.exists(first) and os.path.exists(second):
+        return os.path.samefile(first, second)
+    return os.path.realpath(first) == os.path.realpath(second)
+
+
 def check_paths(parser: argparse.ArgumentParser, inputs: dict, outputs: dict, overwrite: bool) -> None:
     """Stop with a usage error, before anything is computed, if a file cannot be read or must not be written."""
     for option, path in inputs.items():
         if not os.path.isfile(path):
             parser.error(f"{option}: '{path}' does not exist")
 
-    input_options = {os.path.realpath(path): option for option, path in inputs.items()}
-    output_options = {}
+    checked = {}
     for option, path in outputs.items():
         if path is None:
             continue
+        for input_option, input_path in inputs.items():
+            if same_file(path, input_path):
+                parser.error(f"{option}: '{path}' is the file given as {input_option}; inputs are never overwritten")
+        for other_option, other_path in checked.items():
+            if same_file(path, other_path):
+                parser.error(f"{option} and {other_option} point to the same file '{path}'")
+        checked[option] = path
+
         target = os.path.realpath(path)
-        if target in input_options:
-            parser.error(f"{option}: '{path}' is the file given as {input_options[target]}; inputs are never overwritten")
-        if target in output_options:
-            parser.error(f"{option} and {output_options[target]} point to the same file '{path}'")
-        output_options[target] = option
+        if os.path.isdir(target):
+            parser.error(f"{option}: '{path}' is a directory")
         if not os.path.isdir(os.path.dirname(target)):
             parser.error(f"{option}: the directory '{os.path.dirname(target)}' does not exist")
         if os.path.exists(target) and not overwrite:
@@ -308,6 +319,11 @@ def bam_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> in
     inputs = {"--bam": args.bam, "--barcodes": args.barcodes}
     if args.bam_index is not None:
         inputs["--bam-index"] = args.bam_index
+    else:
+        # The index that pysam finds next to the BAM file is an input too, and is protected like one
+        for candidate in (args.bam + ".bai", args.bam + ".csi", os.path.splitext(args.bam)[0] + ".bai"):
+            if os.path.isfile(candidate):
+                inputs[f"the index of --bam ({os.path.basename(candidate)})"] = candidate
     check_paths(parser, inputs, {"--output": args.output}, args.overwrite)
     if args.tiles < 1:
         parser.error("--tiles must be at least 1")

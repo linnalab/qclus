@@ -144,3 +144,18 @@ def test_command_line(bam, tmp_path, capsys):
     with pytest.raises(SystemExit) as exit_info:
         main(arguments)
     assert exit_info.value.code == 2
+
+
+def test_command_line_protects_the_index_it_finds(bam, capsys):
+    from qclus.cli import main
+
+    bam_path, barcodes_path = bam
+    index = bam_path + ".bai"
+    before = open(index, "rb").read()
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["splicing-from-bam", "--bam", bam_path, "--barcodes", barcodes_path, "-o", index, "--overwrite", "--cores", "1"])
+
+    assert exit_info.value.code == 2
+    assert "inputs are never overwritten" in capsys.readouterr().err
+    assert open(index, "rb").read() == before
