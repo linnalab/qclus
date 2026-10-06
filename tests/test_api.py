@@ -52,6 +52,27 @@ def test_normalised_input_is_flagged(dataset):
         qc.run_qclus(adata, dataset.fraction_unspliced, scrublet_filter=False, compute_embedding=False)
 
 
+def test_fractional_values_are_found_anywhere_in_the_matrix(dataset):
+    adata = dataset.adata.copy()
+    assert adata.X.nnz > 200_000
+    adata.X.data[-1] = 0.5
+    with pytest.warns(UserWarning, match="not whole numbers"):
+        qc.utils.warn_if_not_counts(adata)
+
+
+def test_rerunning_an_annotated_object_leaves_nothing_of_the_earlier_run(dataset, default_run):
+    kept = dataset.fraction_unspliced.iloc[::2]
+    with pytest.warns(UserWarning, match="without splicing information"):
+        result = qc.run_qclus(default_run, kept, compute_embedding=False, scrublet_filter=False)
+
+    assert result.n_obs == len(kept)
+    assert "QClus_umap" not in result.uns and "QClus_umap" not in result.obsm
+    assert "score_scrublet" not in result.obs
+    assert sum(result.uns["qclus"]["n_barcodes"].values()) == len(kept)
+    # The input is the shared result of another run and must be left as it was
+    assert "QClus_umap" in default_run.uns and "score_scrublet" in default_run.obs
+
+
 def test_embedding_is_aligned_with_the_barcodes(default_run):
     aligned, compact = default_run.obsm["QClus_umap"], default_run.uns["QClus_umap"]
     scored = (default_run.obs["qclus"] != "initial filter").to_numpy()

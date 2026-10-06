@@ -20,11 +20,28 @@ def test_kmeans_labels_are_ordered_by_fraction_unspliced():
     assert set(labels[60:]) == {"1"}
 
 
-def test_kmeans_orders_empty_clusters_last():
+def test_kmeans_tolerates_clusters_left_empty():
     features = pd.DataFrame({"fraction_unspliced": [0.5] * 10, "pct_counts_MT": [1.0] * 10})
     with pytest.warns(Warning):
         labels = utils.do_kmeans(features, k=3)
-    assert set(labels) == {"0"}
+    assert len(set(labels)) == 1
+
+
+def test_kmeans_numbering_with_empty_clusters_is_that_of_earlier_versions(monkeypatch):
+    # Clusters 1 and 3 are empty, so they have no mean. Earlier versions sorted the means with Python's
+    # sort, which leaves a list containing missing values in its original order: the clusters then keep
+    # the numbers k-means gave them and are not ordered by fraction_unspliced. This only happens when there
+    # are fewer distinct droplets than clusters. The numbering is kept so that labels never change.
+    class FixedLabels:
+        def __init__(self, **kwargs):
+            pass
+
+        def fit_predict(self, X):
+            return np.array([0, 2, 4, 0, 2])
+
+    monkeypatch.setattr(utils, "KMeans", FixedLabels)
+    features = pd.DataFrame({"fraction_unspliced": [0.2, 0.9, 0.5, 0.2, 0.9], "pct_counts_MT": [1.0, 2.0, 3.0, 1.0, 2.0]})
+    assert utils.do_kmeans(features, k=5) == ["0", "2", "4", "0", "2"]
 
 
 def test_outlier_thresholds():

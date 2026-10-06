@@ -169,13 +169,15 @@ def warn_if_not_counts(adata: AnnData) -> None:
         adata (AnnData): AnnData object whose X is checked.
     """
     # A sparse matrix keeps its non-zero values in .data
-    values = adata.X.data if hasattr(adata.X, "nnz") else np.asarray(adata.X)
-    sample = np.ravel(values)[:100_000]
-    if sample.size > 0 and not np.all(np.mod(sample, 1) == 0):
-        warnings.warn(
-            "The count matrix holds values that are not whole numbers. QClus expects raw counts; "
-            "normalized or transformed data gives misleading QC metrics and doublet scores."
-        )
+    values = np.ravel(adata.X.data if hasattr(adata.X, "nnz") else np.asarray(adata.X))
+    chunk_size = 1_000_000
+    for start in range(0, values.size, chunk_size):
+        if not np.all(np.mod(values[start:start + chunk_size], 1) == 0):
+            warnings.warn(
+                "The count matrix holds values that are not whole numbers. QClus expects raw counts; "
+                "normalized or transformed data gives misleading QC metrics and doublet scores."
+            )
+            return
 
 
 
@@ -473,8 +475,7 @@ def do_kmeans(X_full: pd.DataFrame, k: int, n_init: int = 1) -> List[str]:
         cluster_df = X_full[labels == cluster_label]
         clusters.append((cluster_label, cluster_df['fraction_unspliced'].mean()))
 
-    # A cluster that k-means left empty has no mean; it is ordered last
-    sorted_clusters = sorted(clusters, key=lambda x: -np.inf if np.isnan(x[1]) else x[1], reverse=True)
+    sorted_clusters = sorted(clusters, key=lambda x: x[1], reverse=True)
     cluster_order = {cluster_label: str(idx) for idx, (cluster_label, _) in enumerate(sorted_clusters)}
 
     # Reassign cluster labels based on sorted order

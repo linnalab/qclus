@@ -152,6 +152,13 @@ def run_qclus(
         adata = read_count_file(counts_path)
     warn_if_not_counts(adata)
 
+    # If the input is the output of an earlier run, drop what that run wrote.
+    # It would otherwise survive wherever this run does not write it again.
+    adata.uns.pop("QClus_umap", None)
+    adata.uns.pop("qclus", None)
+    adata.obsm.pop("QClus_umap", None)
+    adata.obs = adata.obs.drop(columns=["score_scrublet", "kmeans", "qclus"], errors="ignore")
+
     adata.obs["original_barcode"] = adata.obs.index.astype(str)
     adata.obs.index = create_new_index(adata.obs.index)
     check_unique_barcodes(adata.obs.index, "the counts")

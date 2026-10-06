@@ -23,6 +23,13 @@ def test_planted_populations_land_in_expected_filters(dataset, default_run):
     assert labels[nuclei].isin(["passed", "scrublet filter"]).all()
     assert (labels[nuclei] == "passed").mean() > 0.85
 
+    doublets = populations == "doublet"
+    assert labels[doublets].isin(["passed", "scrublet filter"]).all()
+    removed_doublets = (labels[doublets] == "scrublet filter").mean()
+    removed_nuclei = (labels[nuclei] == "scrublet filter").mean()
+    assert removed_doublets > 0.5
+    assert removed_doublets > 3 * removed_nuclei
+
 
 def test_output_keeps_original_barcodes(dataset, default_run):
     assert list(default_run.obs["original_barcode"]) == list(dataset.adata.obs_names)
