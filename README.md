@@ -10,7 +10,7 @@ Any and all comments/criticisms/suggestions are enthusiastically received! :-)
 
 QClus needs Python 3.11 or newer and runs on Linux and macOS. On Windows, please use WSL.
 
-### With conda (recommended for now)
+### With conda
 
 Note: In order to use our environment installation script, you need to have conda ([Anaconda](https://docs.anaconda.com/anaconda/install/)/[Miniconda](https://docs.anaconda.com/miniconda/install/)) installed on your machine. 
 
@@ -33,8 +33,6 @@ To also install what the tutorial notebooks use (JupyterLab, matplotlib, leidena
 ```pip install "qclus[tutorials] @ git+https://github.com/linnalab/qclus.git"```
 
 pip compiles one dependency (`annoy`) from source, so a C++ compiler has to be available. A release on PyPI is planned.
-
-**Apple Silicon Macs:** please use the conda installation for now. We have seen `annoy` return wrong neighbours when pip builds it on these machines, and the doublet filter then removes nothing without any warning. The next release removes this dependence.
 
 
 ## Getting Started
