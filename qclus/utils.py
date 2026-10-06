@@ -15,6 +15,75 @@ import pandas as pd
 from anndata import AnnData
 
 
+def check_unique_barcodes(barcodes: pd.Index, source: str) -> None:
+    """
+    Raise an error if cell barcodes are not unique after truncation.
+
+    Parameters:
+        barcodes (pd.Index): Truncated cell barcodes.
+        source (str): Where the barcodes come from, used in the error message.
+
+    Raises:
+        ValueError: If any barcode occurs more than once.
+    """
+    barcodes = pd.Index(barcodes)
+    duplicated = barcodes[barcodes.duplicated()].unique()
+    if len(duplicated) > 0:
+        raise ValueError(
+            f"{len(duplicated)} barcodes in {source} are not unique after truncation to 16 characters "
+            f"(for example '{duplicated[0]}'). QClus runs one sample at a time."
+        )
+
+
+def prepare_fraction_unspliced(fraction_unspliced: Union[pd.Series, pd.DataFrame]) -> pd.Series:
+    """
+    Validate the fraction of unspliced reads and index it by truncated cell barcodes.
+
+    Parameters:
+        fraction_unspliced (pd.Series or pd.DataFrame): Fraction of unspliced reads per cell. A DataFrame
+            must have a 'fraction_unspliced' column or exactly one column.
+
+    Returns:
+        pd.Series: Fraction of unspliced reads, indexed by cell barcodes truncated to 16 characters.
+
+    Raises:
+        TypeError: If the input is neither a Series nor a DataFrame.
+        ValueError: If the column cannot be identified, barcodes are not unique after truncation,
+            or values are missing, not numeric, or outside 0 to 1.
+    """
+    if isinstance(fraction_unspliced, pd.DataFrame):
+        if "fraction_unspliced" in fraction_unspliced.columns:
+            series = fraction_unspliced["fraction_unspliced"]
+        elif fraction_unspliced.shape[1] == 1:
+            series = fraction_unspliced.iloc[:, 0]
+        else:
+            raise ValueError(
+                f"fraction_unspliced has {fraction_unspliced.shape[1]} columns and none is named "
+                "'fraction_unspliced'."
+            )
+    elif isinstance(fraction_unspliced, pd.Series):
+        series = fraction_unspliced
+    else:
+        raise TypeError(
+            f"fraction_unspliced must be a pandas Series or DataFrame, got {type(fraction_unspliced)}."
+        )
+
+    series = series.rename("fraction_unspliced")
+    series.index = pd.Index(create_new_index(series.index))
+    check_unique_barcodes(series.index, "fraction_unspliced")
+
+    if not pd.api.types.is_numeric_dtype(series):
+        raise ValueError(f"fraction_unspliced must be numeric, got dtype {series.dtype}.")
+    if series.isna().any():
+        raise ValueError(f"fraction_unspliced has {int(series.isna().sum())} missing values.")
+    if ((series < 0) | (series > 1)).any():
+        raise ValueError(
+            "fraction_unspliced must lie between 0 and 1, but its values range from "
+            f"{series.min()} to {series.max()}."
+        )
+    return series
+
+
 def add_fraction_unspliced(
         adata: AnnData,
         fraction_unspliced: pd.Series
@@ -67,21 +136,23 @@ def read_count_file(file_path: str) -> AnnData:
         ValueError: If the file format is not supported.
         IOError: If there is an error reading the file.
     """
-    # print('Reading counts file')
+    file_path = os.fspath(file_path)
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"The counts file '{file_path}' does not exist.")
 
+    if file_path.endswith('.h5'):
+        reader = sc.read_10x_h5
+    elif file_path.endswith('.h5ad'):
+        reader = sc.read_h5ad
+    else:
+        raise ValueError(
+            f"Unsupported file format for '{file_path}'. Only .h5 and .h5ad are supported."
+        )
+
     try:
-        if file_path.endswith('.h5'):
-            adata = sc.read_10x_h5(file_path)
-        elif file_path.endswith('.h5ad'):
-            adata = sc.read_h5ad(file_path)
-        else:
-            raise ValueError(
-                f"Unsupported file format for '{file_path}'. Only .h5 and .h5ad are supported."
-            )
+        adata = reader(file_path)
     except Exception as e:
-        raise IOError(f"Failed to read counts file at '{file_path}': {e}")
+        raise IOError(f"Failed to read counts file at '{file_path}': {e}") from e
 
     # Ensure unique variable names
     adata.var_names_make_unique()
@@ -91,7 +162,7 @@ def read_count_file(file_path: str) -> AnnData:
 
 def get_qc_metrics(
     adata: sc.AnnData,
-    gene_set: List[str],
+    gene_set: Sequence[str],
     key_name: str,
     normlog: bool = False,
     scale: bool = False,
@@ -101,17 +172,28 @@ def get_qc_metrics(
 
     Parameters:
         adata (sc.AnnData): AnnData object containing single-cell data.
-        gene_set (List[str]): List of genes to calculate QC metrics for.
+        gene_set (Sequence[str]): Genes to calculate QC metrics for.
         key_name (str): Key name under which to store the metrics.
         normlog (bool, optional): Whether to normalize and log-transform the data.
         scale (bool, optional): Whether to scale the data.
+
+    Raises:
+        TypeError: If gene_set is a single string.
+        ValueError: If none of the genes are in adata.var_names.
     """
-    # Check if gene_set is a list
-    if not isinstance(gene_set, list):
-        raise TypeError(f"gene_set must be a list, got {type(gene_set)}.")
+    # A single string would be read as a sequence of one-letter gene names
+    if isinstance(gene_set, str):
+        raise TypeError("gene_set must be a sequence of gene names, not a single string.")
+    gene_set = list(gene_set)
 
     # Check if genes are in adata.var_names
     missing_genes = [gene for gene in gene_set if gene not in adata.var_names]
+    if len(missing_genes) == len(gene_set):
+        raise ValueError(
+            f"None of the {len(gene_set)} genes in gene set '{key_name}' are in adata.var_names. "
+            "The gene sets and adata.var_names must use the same gene names; "
+            "the built-in gene sets are human gene symbols."
+        )
     if missing_genes:
         print(f"Warning: The following genes are not in adata.var_names and will be ignored: {missing_genes}")
 

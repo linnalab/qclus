@@ -1,6 +1,7 @@
 from qclus.utils import *
 from qclus.gene_lists import *
 import scanpy as sc
+import warnings
 from typing import List, Dict, Union
 
 def run_qclus(
@@ -66,13 +67,34 @@ def run_qclus(
             give wrong results where annoy is broken.
 
     Returns:
-        sc.AnnData: AnnData object containing the raw data with QClus annotations.
+        sc.AnnData: AnnData object containing the raw data with QClus annotations. It holds the barcodes
+            that have splicing information, under their 16-character names; obs['original_barcode']
+            keeps the names from the counts file.
     """
+    # Check the settings before any data is read
+    if 'fraction_unspliced' not in clustering_features:
+        raise ValueError(
+            "'fraction_unspliced' must be one of the clustering_features, because the clusters are "
+            "ordered by it."
+        )
+
+    clusters_to_select = [str(cluster) for cluster in clusters_to_select]
+    valid_clusters = [str(i) for i in range(clustering_k)]
+    if not clusters_to_select or not set(clusters_to_select) <= set(valid_clusters):
+        raise ValueError(
+            f"clusters_to_select must be a non-empty subset of {valid_clusters} for "
+            f"clustering_k={clustering_k}, got {clusters_to_select}."
+        )
+
+    fraction_unspliced = prepare_fraction_unspliced(fraction_unspliced)
+
     # Initialize AnnData object
 
     adata = read_count_file(counts_path)
 
+    adata.obs["original_barcode"] = adata.obs.index.astype(str)
     adata.obs.index = create_new_index(adata.obs.index)
+    check_unique_barcodes(adata.obs.index, "the counts file")
     adata_raw = adata.copy()
 
     # Filter adata and adata_raw using new utility function
@@ -85,8 +107,8 @@ def run_qclus(
     get_qc_metrics(adata, MT_genes, 'MT')
 
     # Add CM-specific annotations if included in clustering features
-    if 'pct_counts_CM_cyto' in clustering_features and 'pct_counts_CM_nucl' in clustering_features:
-        for entry in CM_gene_set_dict:
+    for entry in CM_gene_set_dict:
+        if 'pct_counts_' + entry in clustering_features:
             get_qc_metrics(adata, CM_gene_set_dict[entry], entry)
 
     if 'pct_counts_nonCM' in clustering_features:
@@ -114,6 +136,17 @@ def run_qclus(
     )
     initial_filter_list = adata.obs.index[adata.obs.initial_filter].tolist()
     adata = adata[~adata.obs.initial_filter]
+
+    # Check that enough barcodes are left for the steps that follow
+    minimum_barcodes = [(clustering_k, f"k-means with clustering_k={clustering_k}"), (4, "the UMAP embedding")]
+    if scrublet_filter:
+        minimum_barcodes.append((scrublet_n_pcs + 1, f"the doublet filter with scrublet_n_pcs={scrublet_n_pcs}"))
+    for minimum, step in minimum_barcodes:
+        if adata.n_obs < minimum:
+            raise ValueError(
+                f"Only {adata.n_obs} of {adata_raw.n_obs} barcodes remain after the initial filter, "
+                f"but {step} needs at least {minimum}."
+            )
 
     # Calculate Scrublet scores
     if scrublet_filter:
@@ -155,6 +188,14 @@ def run_qclus(
     clustering_filter_list = adata.obs.index[adata.obs.clustering_filter].tolist()
     adata = adata[~adata.obs.clustering_filter]
 
+    # K-means can fill fewer than clustering_k clusters when feature vectors repeat
+    if adata.n_obs == 0:
+        filled_clusters = adata_raw.obs.loc[adata_raw.obs.kmeans != "initial filter", "kmeans"].nunique()
+        raise ValueError(
+            f"No barcode is in the selected clusters {clusters_to_select}: k-means filled only "
+            f"{filled_clusters} of {clustering_k} clusters."
+        )
+
     # Outlier filter
     outlier_filter_list = []
     if outlier_filter:
@@ -181,6 +222,9 @@ def run_qclus(
         adata_raw.obs.loc[outlier_filter_list, "qclus"] = "outlier filter"
     if scrublet_filter_list:
         adata_raw.obs.loc[scrublet_filter_list, "qclus"] = "scrublet filter"
+
+    if not (adata_raw.obs["qclus"] == "passed").any():
+        warnings.warn("No barcode passed QClus.")
 
     return adata_raw
 
