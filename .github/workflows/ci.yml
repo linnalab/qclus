@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, python ${{ matrix.python }}, ${{ matrix.resolution }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.12", resolution: highest }
+          - { os: ubuntu-latest, python: "3.13", resolution: highest }
+          - { os: macos-latest, python: "3.12", resolution: highest }
+          # Installs the lower bounds declared in pyproject.toml.
+          - { os: ubuntu-latest, python: "3.11", resolution: lowest-direct }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Install
+        run: |
+          uv venv --python ${{ matrix.python }}
+          uv pip install --resolution ${{ matrix.resolution }} ".[test]"
+      - name: Test
+        run: .venv/bin/python -m pytest
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Check metadata
+        run: uvx twine check --strict dist/*
+      - name: Wheel contains only the qclus package
+        run: |
+          if unzip -Z1 dist/*.whl | grep -v -E '^(qclus/|qclus-[^/]+\.dist-info/)'; then
+            echo "Unexpected files in the wheel (listed above)."
+            exit 1
+          fi
+      - name: Install the wheel and import it outside the checkout
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/wheel-env"
+          uv pip install --python "$RUNNER_TEMP/wheel-env/bin/python" dist/*.whl
+          cd "$RUNNER_TEMP"
+          wheel-env/bin/python -c "import qclus; print(qclus.__version__)"
