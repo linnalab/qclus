@@ -96,9 +96,14 @@ def test_approximate_neighbours_reproduce_the_reference(reference):
     )
 
 
-def test_defaults_change_only_the_doublet_step(reference):
+@pytest.fixture(scope="module")
+def default_result():
+    return run()
+
+
+def test_defaults_change_only_the_doublet_step(reference, default_result):
     obs, extra, _ = reference
-    result = run()
+    result = default_result
 
     assert_features_unchanged(result, obs)
     assert_same_labels(result.obs["kmeans"], obs["kmeans"], "k-means labels")
@@ -106,12 +111,19 @@ def test_defaults_change_only_the_doublet_step(reference):
         result.obs.loc[extra.index, "score_scrublet"], extra["score_scrublet_exact"], rtol=0, atol=1e-9
     )
     assert_same_labels(result.obs["qclus"], expected_labels(obs, extra, "qclus_n_init_1_exact"), "QClus labels")
-    np.testing.assert_allclose(result.uns["QClus_umap"], np.load(REFERENCE / "reference_umap.npy"), rtol=0, atol=1e-6)
 
     # The first three filters are untouched: a barcode they removed keeps its label, and no other gets one
     early = ["initial filter", "clustering filter", "outlier filter"]
     before, after = obs["qclus"].where(obs["qclus"].isin(early)), result.obs["qclus"].where(result.obs["qclus"].isin(early))
     assert_same_labels(after.fillna("later"), before.fillna("later"), "the initial, clustering and outlier labels")
+
+
+def test_embedding_matches_the_reference(default_result):
+    # The UMAP is for plotting only. It depends on the installed umap-learn and numba,
+    # so this is expected to hold in the reference environment and not elsewhere.
+    np.testing.assert_allclose(
+        default_result.uns["QClus_umap"], np.load(REFERENCE / "reference_umap.npy"), rtol=0, atol=1e-6
+    )
 
 
 def test_ten_restarts_match_the_reference(reference):
