@@ -239,6 +239,30 @@ def fraction_unspliced_from_loom(loompy_path: str, batch_size: int = 512) -> pd.
         return pd.DataFrame({'fraction_unspliced': fraction_unspliced}, index=barcodes)
 
 
+def annoy_works() -> bool:
+    """
+    Check that the annoy library returns sensible neighbours in this environment.
+
+    Scrublet's approximate neighbour search relies on annoy. Some builds of annoy return wrong
+    neighbours, in which case every cell gets the same doublet score.
+
+    Returns:
+        bool: True if random vectors are their own nearest neighbour, as they must be.
+    """
+    try:
+        from annoy import AnnoyIndex
+    except ImportError:
+        return False
+
+    vectors = np.random.default_rng(0).normal(size=(200, 30)).astype("float32")
+    index = AnnoyIndex(vectors.shape[1], "euclidean")
+    for i, vector in enumerate(vectors):
+        index.add_item(i, vector.tolist())
+    index.build(10)
+    hits = sum(index.get_nns_by_item(i, 1)[0] == i for i in range(len(vectors)))
+    return hits >= 0.9 * len(vectors)
+
+
 def calculate_scrublet(
     adata: sc.AnnData,
     expected_rate: float = 0.06,
@@ -247,6 +271,7 @@ def calculate_scrublet(
     minimum_gene_variability_pctl: float = 85.0,
     n_pcs: int = 30,
     thresh: float = 0.1,
+    approx_neighbors: bool = False,
 ) -> np.ndarray:
     """
     Calculate doublet scores using Scrublet.
@@ -258,33 +283,65 @@ def calculate_scrublet(
         minimum_cells (int, optional): Minimum cells per gene.
         minimum_gene_variability_pctl (float, optional): Minimum gene variability percentile.
         n_pcs (int, optional): Number of principal components.
-        thresh (float, optional): Threshold for doublet calling.
+        thresh (float, optional): Not used here; the threshold is applied to the returned scores
+            by run_qclus. Kept so that existing calls keep working.
+        approx_neighbors (bool, optional): Whether to use approximate nearest neighbours (annoy)
+            instead of exact ones.
 
     Returns:
         np.ndarray: Array of doublet scores.
+
+    Raises:
+        RuntimeError: If approximate neighbours are requested but annoy is broken in this
+            environment, or if the scores are not finite or are the same for every cell.
+        ValueError: If Scrublet itself fails, for example because there are too few cells or genes.
     """
-    # if not isinstance(adata.X, (np.ndarray, np.matrix)):
-    #     raise TypeError("adata.X must be a numpy array or matrix.")
+    if approx_neighbors and not annoy_works():
+        raise RuntimeError(
+            "The annoy library returns wrong neighbours in this environment, so Scrublet's approximate "
+            "neighbour search cannot be used. Use exact neighbours (scrublet_approx_neighbors=False), "
+            "or install python-annoy from conda-forge."
+        )
 
     scrub = scr.Scrublet(adata.X, expected_doublet_rate=expected_rate)
-    doublet_scores, predicted_doublets = scrub.scrub_doublets(
-        min_counts=minimum_counts,
-        min_cells=minimum_cells,
-        min_gene_variability_pctl=minimum_gene_variability_pctl,
-        n_prin_comps=n_pcs,
-        verbose=False,
-    )
-    scrub.call_doublets(threshold=thresh, verbose=False)
-    return scrub.doublet_scores_obs_
+    try:
+        scrub.scrub_doublets(
+            min_counts=minimum_counts,
+            min_cells=minimum_cells,
+            min_gene_variability_pctl=minimum_gene_variability_pctl,
+            n_prin_comps=n_pcs,
+            use_approx_neighbors=approx_neighbors,
+            verbose=False,
+        )
+    except Exception as e:
+        raise ValueError(
+            f"Scrublet failed on {adata.n_obs} barcodes with scrublet_n_pcs={n_pcs}: {e}. "
+            "Scrublet needs more barcodes, and more genes passing its own gene filter, than principal "
+            "components. Lower scrublet_n_pcs, or skip the doublet filter with scrublet_filter=False."
+        ) from e
+
+    doublet_scores = np.asarray(scrub.doublet_scores_obs_, dtype=float)
+    if not np.all(np.isfinite(doublet_scores)):
+        raise RuntimeError(
+            f"Scrublet returned {int((~np.isfinite(doublet_scores)).sum())} doublet scores that are not "
+            "finite numbers. Skip the doublet filter with scrublet_filter=False to continue without it."
+        )
+    if doublet_scores.size > 0 and np.all(doublet_scores == doublet_scores[0]):
+        raise RuntimeError(
+            f"Scrublet gave every barcode the same doublet score ({doublet_scores[0]:.3g}), so the doublet "
+            "filter cannot separate anything on this input. Skip it with scrublet_filter=False to continue."
+        )
+    return doublet_scores
 
 
-def do_kmeans(X_full: pd.DataFrame, k: int) -> List[str]:
+def do_kmeans(X_full: pd.DataFrame, k: int, n_init: int = 1) -> List[str]:
     """
     Perform k-means clustering and sort clusters by decreasing mean fraction_unspliced.
 
     Parameters:
         X_full (pd.DataFrame): DataFrame containing features for clustering.
         k (int): Number of clusters.
+        n_init (int, optional): Number of k-means restarts; the best one is kept.
 
     Returns:
         List[str]: List of cluster labels as strings.
@@ -297,7 +354,7 @@ def do_kmeans(X_full: pd.DataFrame, k: int) -> List[str]:
     X_scaled = scaler.fit_transform(X_full)
 
     # Perform k-means clustering
-    kmeans = KMeans(n_clusters=k, random_state=0)
+    kmeans = KMeans(n_clusters=k, random_state=0, n_init=n_init)
     labels = kmeans.fit_predict(X_scaled)
     X_full['kmeans'] = labels.astype(str)
 
@@ -307,7 +364,8 @@ def do_kmeans(X_full: pd.DataFrame, k: int) -> List[str]:
         cluster_df = X_full[X_full['kmeans'] == cluster_label]
         clusters.append((cluster_label, cluster_df['fraction_unspliced'].mean()))
 
-    sorted_clusters = sorted(clusters, key=lambda x: x[1], reverse=True)
+    # A cluster that k-means left empty has no mean; it is ordered last
+    sorted_clusters = sorted(clusters, key=lambda x: -np.inf if np.isnan(x[1]) else x[1], reverse=True)
     cluster_order = {cluster_label: str(idx) for idx, (cluster_label, _) in enumerate(sorted_clusters)}
 
     # Reassign cluster labels based on sorted order

@@ -1,11 +1,11 @@
 from qclus.utils import *
 from qclus.gene_lists import *
 import scanpy as sc
-from typing import List, Dict
+from typing import List, Dict, Union
 
 def run_qclus(
     counts_path: str,
-    fraction_unspliced: pd.Series,
+    fraction_unspliced: Union[pd.Series, pd.DataFrame],
     nucl_gene_set: List[str] = nucl_30,
     celltype_gene_set_dict: Dict[str, List[str]] = celltype_gene_set_dict,
     minimum_genes: int = 500,
@@ -31,13 +31,16 @@ def run_qclus(
     outlier_filter: bool = True,
     outlier_unspliced_diff: float = 0.1,
     outlier_mito_diff: float = 5.0,
+    kmeans_n_init: int = 1,
+    scrublet_approx_neighbors: bool = False,
 ) -> sc.AnnData:
     """
     Run the QClus pipeline on single-cell RNA sequencing data.
 
     Parameters:
         counts_path (str): Path to the 10x Genomics counts .h5 file.
-        fraction_unspliced (pd.Series): Series containing the fraction of unspliced reads per cell.
+        fraction_unspliced (pd.Series or pd.DataFrame): Fraction of unspliced reads per cell, indexed by
+            cell barcode. A DataFrame must have a 'fraction_unspliced' column or exactly one column.
         nucl_gene_set (List[str], optional): List of nuclear genes for QC metrics.
         celltype_gene_set_dict (Dict[str, List[str]], optional): Dictionary of cell type-specific gene sets.
         minimum_genes (int, optional): Minimum number of genes expressed to pass initial filter.
@@ -56,6 +59,11 @@ def run_qclus(
         outlier_filter (bool, optional): Whether to perform outlier filtering.
         outlier_unspliced_diff (float, optional): Unspliced fraction difference threshold for outlier filtering.
         outlier_mito_diff (float, optional): Mitochondrial percentage difference threshold for outlier filtering.
+        kmeans_n_init (int, optional): Number of k-means restarts; the best one is kept. The default of 1
+            is what scikit-learn 1.4 and later run when it is not set, as in QClus 0.2.0 and earlier.
+        scrublet_approx_neighbors (bool, optional): Whether Scrublet uses approximate nearest neighbours
+            (annoy) instead of exact ones. QClus 0.2.0 and earlier used approximate neighbours, which
+            give wrong results where annoy is broken.
 
     Returns:
         sc.AnnData: AnnData object containing the raw data with QClus annotations.
@@ -117,7 +125,10 @@ def run_qclus(
             minimum_gene_variability_pctl=scrublet_minimum_gene_variability_pctl,
             n_pcs=scrublet_n_pcs,
             thresh=scrublet_thresh,
+            approx_neighbors=scrublet_approx_neighbors,
         )
+        adata_raw.obs["score_scrublet"] = np.nan
+        adata_raw.obs.loc[adata.obs.index, "score_scrublet"] = adata.obs.score_scrublet
 
     # Normalize and logarithmize
     # sc.pp.normalize_total(adata, target_sum=1e4)
@@ -133,7 +144,7 @@ def run_qclus(
     adata_raw.uns["QClus_umap"] = cluster_embedding  # Store the embedding
 
     # Perform unsupervised clustering
-    adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:, clustering_features], k=clustering_k)
+    adata.obs["kmeans"] = do_kmeans(adata.obs.loc[:, clustering_features], k=clustering_k, n_init=kmeans_n_init)
 
     # Add cluster results to adata_raw
     adata_raw.obs["kmeans"] = "initial filter"
@@ -175,7 +186,7 @@ def run_qclus(
 
 
 def quickstart_qclus(counts_path: str,
-                     fraction_unspliced: pd.Series,
+                     fraction_unspliced: Union[pd.Series, pd.DataFrame],
                      tissue: str = 'heart'):
     """
     A function that performs quick clustering based on the specified tissue type.
@@ -187,8 +198,8 @@ def quickstart_qclus(counts_path: str,
 
     :param counts_path: Path to the count matrix used as input data.
     :type counts_path: str
-    :param fraction_unspliced: A Series representing the fraction of unspliced RNA values for each cell/sample.
-    :type fraction_unspliced: pd.Series
+    :param fraction_unspliced: A Series or DataFrame with the fraction of unspliced RNA for each cell.
+    :type fraction_unspliced: pd.Series or pd.DataFrame
     :param tissue: The type of tissue to analyze, which determines the clustering workflow. Default is 'heart'.
     :type tissue: str
 
