@@ -24,6 +24,8 @@ The method is unchanged: the same features, the same four filters in the same or
 ### Added
 
 
+- A `qclus` command: `qclus run` processes a sample and writes the annotated `.h5ad` file, the per-barcode table, or both. `qclus splicing-from-bam` and `qclus splicing-from-loom` calculate the fraction of unspliced reads. `python -m qclus` does the same.
+
 - `kmeans_n_init` sets the number of k-means restarts. The default of 1 is what scikit-learn 1.4 and later already ran, so labels do not change.
 
 - The output has two new columns: `score_scrublet`, the doublet score, and `original_barcode`, the barcode as it appears in the counts file.

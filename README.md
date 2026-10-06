@@ -2,7 +2,7 @@
 
 This is a novel droplet filtering method targeted to streamline the processing of snRNA-seq samples. The algorithm uses various metrics to cluster nuclei and filter empty and highly contaminated droplets. This approach combined with other filtering steps enables for flexible, automated, and reliable preprocessing of samples with varying number of nuclei, quality, and contamination levels. The robustness of this method has been validated on a large number of heterogeneous datasets, in terms of number of nuclei, overall quality, and contamination.
 
-Additionally, while the method was originally developed for cardiac snRNA-seq data, in our paper we show that given it's felxible design it can also be applied to other tissues. We will provide detailed tutorials for this process.
+Additionally, while the method was originally developed for cardiac snRNA-seq data, in our paper we show that given its flexible design it can also be applied to other tissues. The tutorials below cover both cases.
 
 Any and all comments/criticisms/suggestions are enthusiastically received! :-)
 
@@ -41,7 +41,7 @@ You can find tutorials on how to use QClus in the `tutorials` directory. They ar
 
 In order to run QClus, you will need two things:
 
-1. The path to your count matrix of your droplets (can be provided as .h5 or .h5ad). In our benchmarking we begin with the filtered 10X output, but in principle the unfiltered output can also be used.
+1. The count matrix of your droplets: the path to an .h5 or .h5ad file, or an AnnData object you have already loaded. It has to hold raw counts. In our benchmarking we begin with the filtered 10X output, but in principle the unfiltered output can also be used.
 2. The fraction of unspliced reads for each droplet, e.g. `fraction_unspliced.csv`. They should be in the following format:
 
 |              | fraction_unspliced |
@@ -95,10 +95,37 @@ adata = qc.quickstart_qclus(counts_path,
 
 This executes QClus without cell type specific metrics. For fine-tuning non-cardiac data, you can check the tutorials below.
 
+The returned object holds the droplets that have splicing information. `adata.obs["qclus"]` is `passed` for droplets that pass, and otherwise names the filter that removed the droplet.
+
+### Running QClus from the command line
+
+Installing QClus also installs a `qclus` command, which processes one sample per call:
+
+```
+qclus run \
+    --counts filtered_feature_bc_matrix.h5 \
+    --fraction-unspliced fraction_unspliced.csv \
+    --output sample_qclus.h5ad \
+    --obs-csv sample_qclus.csv
+```
+
+`--output` writes the annotated AnnData object, and `--obs-csv` writes the per-droplet table on its own, which is all you need to filter the sample in R or Seurat. At least one of the two is required. Use `--tissue other` for non-cardiac data and `--passed-only` to keep only the droplets that pass. `qclus run --help` lists every setting.
+
+The fraction of unspliced reads can be calculated from the command line as well:
+
+```
+qclus splicing-from-bam \
+    --bam possorted_genome_bam.bam \
+    --barcodes filtered_feature_bc_matrix/barcodes.tsv.gz \
+    --output fraction_unspliced.csv
+
+qclus splicing-from-loom --loom sample.loom --output fraction_unspliced.csv
+```
+
 
 ### Running QClus in a Scanpy workflow
 
-We provide also provide tutorial notebooks ([heart](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial_heart.ipynb) and [brain](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial_brain.ipynb)) which shows how to run QClus as part of a simple Scanpy workflow and how to evaluate the results.
+We also provide tutorial notebooks ([heart](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial_heart.ipynb) and [brain](https://github.com/linnalab/qclus/blob/main/tutorials/qclus_tutorial_brain.ipynb)) which show how to run QClus as part of a simple Scanpy workflow and how to evaluate the results.
 
 ## How to cite
 
