@@ -32,6 +32,27 @@ The method is unchanged: the same features, the same four filters in the same or
 
 - `bam_index_path` is optional in `fraction_unspliced_from_bam`, and `fraction_unspliced_from_loom` takes a `batch_size`.
 
+- `run_qclus` and `quickstart_qclus` accept an `AnnData` object in place of a file path. The object is copied and never modified.
+
+- `compute_embedding=False` skips the UMAP of the clustering features, which is used only for plotting and takes about half of the runtime.
+
+- The UMAP is also stored in `obsm["QClus_umap"]`, with one row per barcode, so it can be plotted without subsetting first. `uns["QClus_umap"]` is still written for now.
+
+- `uns["qclus"]` records the QClus version, the settings, the outlier thresholds and the number of barcodes per label.
+
+- `quickstart_qclus` passes any further argument on to `run_qclus`, and its tissue settings are available as `qclus.TISSUE_PRESETS`.
+
+
+
+### Changed
+
+
+- Notices about the data, such as genes missing from a gene set or barcodes without splicing information, are now warnings instead of printed text. Progress is logged to the `qclus` logger.
+
+- `import qclus` takes about 3 seconds instead of 9, because loompy, pysam, scrublet and umap are imported only when used.
+
+- A count matrix with values that are not whole numbers triggers a warning, since QClus expects raw counts.
+
 
 
 ### Fixed
