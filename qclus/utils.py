@@ -3,14 +3,14 @@ import scrublet as scr
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 import pysam
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import os
 import scanpy as sc
-from typing import List, Optional
+from typing import Iterable, List, Optional, Sequence, Union
 import numpy as np
 from umap import UMAP
-from typing import Optional
 import pandas as pd
 from anndata import AnnData
 
@@ -193,27 +193,47 @@ def create_new_index(index: pd.Index) -> List[str]:
     return [str(x)[:16] for x in index]
 
 
-def fraction_unspliced_from_loom(loompy_path: str) -> pd.DataFrame:
+def fraction_unspliced_from_loom(loompy_path: str, batch_size: int = 512) -> pd.DataFrame:
     """
     Calculate the fraction of unspliced reads per cell from a Loom file.
 
     Parameters:
         loompy_path (str): Path to the Loom file.
+        batch_size (int, optional): Number of cells read into memory at a time.
 
     Returns:
         pd.DataFrame: DataFrame containing the fraction of unspliced reads per cell.
+
+    Raises:
+        FileNotFoundError: If the Loom file does not exist.
+        ValueError: If the cell IDs are not in Velocyto's 'sample:barcode' form.
     """
     if not os.path.exists(loompy_path):
         raise FileNotFoundError(f"The Loom file '{loompy_path}' does not exist.")
 
-    with loompy.connect(loompy_path) as loompy_con:
-        barcodes = [x.split(':')[1][:16] for x in loompy_con.ca['CellID']]
-        spliced_counts = loompy_con.layers['spliced'][:, :].sum(axis=0)
-        unspliced_counts = loompy_con.layers['unspliced'][:, :].sum(axis=0)
-        ambiguous_counts = loompy_con.layers['ambiguous'][:, :].sum(axis=0)
+    # The file is only read, so it is opened read-only (loompy's default mode needs write access)
+    with loompy.connect(loompy_path, mode='r') as loompy_con:
+        cell_ids = [str(x) for x in loompy_con.ca['CellID']]
+        malformed = [x for x in cell_ids if ':' not in x]
+        if malformed:
+            raise ValueError(
+                f"{len(malformed)} cell IDs in '{loompy_path}' are not in Velocyto's 'sample:barcode' form "
+                f"(for example '{malformed[0]}')."
+            )
+        barcodes = [x.split(':')[1][:16] for x in cell_ids]
 
-        total_counts = spliced_counts + unspliced_counts + ambiguous_counts
-        fraction_unspliced = unspliced_counts / total_counts
+        # Sum each layer over batches of cells instead of loading it whole
+        n_cells = loompy_con.shape[1]
+        counts = {}
+        for layer in ('spliced', 'unspliced', 'ambiguous'):
+            counts[layer] = np.concatenate([
+                loompy_con.layers[layer][:, start:start + batch_size].sum(axis=0)
+                for start in range(0, n_cells, batch_size)
+            ])
+
+        total_counts = counts['spliced'] + counts['unspliced'] + counts['ambiguous']
+        with np.errstate(invalid='ignore'):
+            fraction_unspliced = counts['unspliced'] / total_counts
         fraction_unspliced = np.nan_to_num(fraction_unspliced)  # Replace NaN with zero
 
         return pd.DataFrame({'fraction_unspliced': fraction_unspliced}, index=barcodes)
@@ -333,14 +353,27 @@ def annotate_outliers(
     return is_outlier
 
 
+def available_cpus() -> int:
+    """
+    Number of CPU cores this process may use.
+
+    On a compute cluster this is the number of cores the job was given, not the size of the node.
+    """
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0))
+    return os.cpu_count() or 1
+
+
 def parse_bam_tags(
     interval: tuple,
     bam_path: str,
-    barcodes: List[str],
+    barcodes: Iterable[str],
     CB_tag: str,
     RE_tag: str,
     EXON_tag: str,
     INTRON_tag: str,
+    bam_index_path: Optional[str] = None,
+    count_by_start: bool = False,
 ) -> Optional[pd.DataFrame]:
     """
     Parse BAM file tags for a given genomic interval.
@@ -348,38 +381,42 @@ def parse_bam_tags(
     Parameters:
         interval (tuple): Tuple of (contig, start, end).
         bam_path (str): Path to the BAM file.
-        barcodes (List[str]): List of cell barcodes.
+        barcodes (Iterable[str]): Cell barcodes to count reads for.
         CB_tag (str): Tag for cell barcode in BAM file.
         RE_tag (str): Tag for region type in BAM file.
         EXON_tag (str): Tag indicating exon region.
         INTRON_tag (str): Tag indicating intron region.
+        bam_index_path (str, optional): Path to the BAM index file. Found automatically if omitted.
+        count_by_start (bool, optional): If True, count only reads that start inside the interval,
+            so that adjacent intervals never count the same read twice. If False, count every read
+            that overlaps the interval.
 
     Returns:
         Optional[pd.DataFrame]: DataFrame with counts of exon and intron reads per barcode.
     """
-    bam_file = pysam.AlignmentFile(bam_path, "rb")
-    tags = {'CB': [], 'RE': []}
+    if not isinstance(barcodes, (set, frozenset)):
+        barcodes = set(barcodes)
+    contig, start, end = interval
 
-    for read in bam_file.fetch(interval[0], interval[1], interval[2]):
-        if not read.has_tag(CB_tag) or not read.has_tag(RE_tag):
-            continue
-        cb_tag = read.get_tag(CB_tag)
-        re_tag = read.get_tag(RE_tag)
-        if cb_tag in barcodes:
-            tags['CB'].append(cb_tag)
-            tags['RE'].append(re_tag)
+    counts = Counter()
+    with pysam.AlignmentFile(bam_path, "rb", index_filename=bam_index_path) as bam_file:
+        for read in bam_file.fetch(contig, start, end):
+            if count_by_start and read.reference_start < start:
+                continue
+            if not read.has_tag(CB_tag) or not read.has_tag(RE_tag):
+                continue
+            cb_tag = read.get_tag(CB_tag)
+            if cb_tag in barcodes:
+                counts[(cb_tag, read.get_tag(RE_tag))] += 1
 
-    if not tags['CB']:
+    if not counts:
         return None
 
-    tags_df = pd.DataFrame(tags)
-    tags_df = tags_df.dropna()
-
-    # Count occurrences
+    # Rows are barcodes, columns are region types
     count_data = (
-        tags_df.groupby(['CB', 'RE'])
-        .size()
+        pd.Series(counts)
         .unstack(fill_value=0)
+        .rename_axis(index='CB', columns='RE')
         .reindex(columns=[EXON_tag, INTRON_tag], fill_value=0)
     )
     return count_data
@@ -400,9 +437,13 @@ def fraction_unspliced_from_bam(
     """
     Calculate the fraction of unspliced reads per cell from a BAM file.
 
+    By default the genome is split into tiles that do not overlap, and every read is counted once,
+    in the tile that contains its start. If regions are given, every read overlapping a region is
+    counted for that region, so a read overlapping two regions is counted in both.
+
     Parameters:
         bam_path (str, optional): Path to the BAM file.
-        bam_index_path (str, optional): Path to the BAM index file.
+        bam_index_path (str, optional): Path to the BAM index file. Found automatically if omitted.
         barcodes_path (str, optional): Path to cell barcodes.
         regions (List[tuple], optional): List of genomic intervals to process.
         tiles (int, optional): Number of genomic regions to process in parallel.
@@ -414,61 +455,79 @@ def fraction_unspliced_from_bam(
 
     Returns:
         Optional[pd.DataFrame]: DataFrame containing the fraction of unspliced reads per cell.
+
+    Raises:
+        ValueError: If a required path is missing, tiles is less than 1, the BAM header lists no
+            reference sequences, or no read matches the barcodes and tags.
+        FileNotFoundError: If the BAM file or the given index file does not exist.
     """
-    if bam_path is None or bam_index_path is None or barcodes_path is None:
-        raise ValueError("Please provide bam_path, bam_index_path, and barcodes.")
+    if bam_path is None or barcodes_path is None:
+        raise ValueError("Please provide bam_path and barcodes_path.")
 
     if not os.path.exists(bam_path):
         raise FileNotFoundError(f"The BAM file '{bam_path}' does not exist.")
 
-    if not os.path.exists(bam_index_path):
+    if bam_index_path is not None and not os.path.exists(bam_index_path):
         raise FileNotFoundError(f"The BAM index file '{bam_index_path}' does not exist.")
 
-    # Remove any suffixes from barcodes
-    barcode_df = pd.read_csv(barcodes_path, 
-                           header=None, 
+    if tiles < 1:
+        raise ValueError(f"tiles must be at least 1, got {tiles}.")
+
+    barcode_df = pd.read_csv(barcodes_path,
+                           header=None,
                            sep="\t")
-    barcodes = barcode_df[0].tolist()
+    barcodes = set(barcode_df[0])
 
-    bam_file = pysam.AlignmentFile(bam_path, "rb", index_filename=bam_index_path)
     if cores is None:
-        cores = max(1, os.cpu_count() - 1)
+        cores = max(1, available_cpus() - 1)
 
+    # Reads are assigned to generated tiles by their start; user-supplied regions count overlaps
+    count_by_start = regions is None
     if regions is None:
+        with pysam.AlignmentFile(bam_path, "rb", index_filename=bam_index_path) as bam_file:
+            references, lengths = bam_file.references, bam_file.lengths
+
         # Split the genome into regions
-        total_length = sum(bam_file.lengths)
-        tile_size = total_length // tiles
+        total_length = sum(lengths)
+        if total_length <= 0:
+            raise ValueError(f"The header of '{bam_path}' lists no reference sequences.")
+        tile_size = max(1, total_length // tiles)
         regions = []
-        for contig, length in zip(bam_file.references, bam_file.lengths):
+        for contig, length in zip(references, lengths):
             for start in range(0, length, tile_size):
                 end = min(start + tile_size, length)
                 regions.append((contig, start, end))
 
+    worker_args = (barcodes, CB_tag, RE_tag, EXON_tag, INTRON_tag, bam_index_path, count_by_start)
     results = []
-    with ProcessPoolExecutor(max_workers=cores) as executor:
-        futures = {
-            executor.submit(
-                parse_bam_tags,
-                region,
-                bam_path,
-                barcodes,
-                CB_tag,
-                RE_tag,
-                EXON_tag,
-                INTRON_tag,
-            ): region
-            for region in regions
-        }
-
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Processing BAM tiles", unit="tile"):
-            result = future.result()
+    if cores == 1:
+        for region in tqdm(regions, desc="Processing BAM tiles", unit="tile"):
+            result = parse_bam_tags(region, bam_path, *worker_args)
             if result is not None:
                 results.append(result)
+    else:
+        with ProcessPoolExecutor(max_workers=cores) as executor:
+            futures = {
+                executor.submit(parse_bam_tags, region, bam_path, *worker_args): region
+                for region in regions
+            }
+
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Processing BAM tiles", unit="tile"):
+                result = future.result()
+                if result is not None:
+                    results.append(result)
+
+    if not results:
+        raise ValueError(
+            f"No read in '{bam_path}' matched a barcode from '{barcodes_path}'. Check that the barcodes "
+            f"carry the same suffix as the {CB_tag} tag in the BAM file (for example '-1'), and that the "
+            f"tag names are right (CB_tag='{CB_tag}', RE_tag='{RE_tag}')."
+        )
 
     final_df = pd.concat(results).groupby(level=0).sum()
     total_counts = final_df[INTRON_tag] + final_df[EXON_tag]
-    final_df['fraction_unspliced'] = final_df[INTRON_tag] / total_counts
-    final_df['fraction_unspliced'].fillna(0, inplace=True)
+    # A barcode with neither exonic nor intronic reads gets 0
+    final_df['fraction_unspliced'] = (final_df[INTRON_tag] / total_counts).fillna(0)
 
     final_df.index.name = None
     final_df.columns.name = None
