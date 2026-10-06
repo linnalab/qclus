@@ -71,7 +71,7 @@ If you do not have the necessary values from the methods above, we have implemen
 
 ### QClus quickstart
 
-From here you can run the `quickstart_qclus` function. For cardiac data, the function runs QClus with the same settings as in the original publication.
+From here you can run the `quickstart_qclus` function. For cardiac data, the function runs QClus with the settings of the original publication, with one difference: doublet scores are now calculated with exact instead of approximate nearest neighbours. Pass `scrublet_approx_neighbors=True` to use the approximate search of earlier versions.
 
 ```python
 import qclus as qc
