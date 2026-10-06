@@ -1,9 +1,5 @@
-from importlib.metadata import PackageNotFoundError, version
+from . import gene_lists, utils
+from ._version import __version__
+from .qclus import TISSUE_PRESETS, quickstart_qclus, run_qclus
 
-from .qclus import run_qclus, quickstart_qclus
-
-try:
-    __version__ = version("qclus")
-except PackageNotFoundError:
-    # Imported from a source checkout that is not installed.
-    __version__ = "unknown"
+__all__ = ["TISSUE_PRESETS", "__version__", "gene_lists", "quickstart_qclus", "run_qclus", "utils"]

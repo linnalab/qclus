@@ -1,18 +1,18 @@
-import loompy
-import scrublet as scr
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
-import pysam
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import os
+import warnings
 import scanpy as sc
-from typing import Iterable, List, Optional, Sequence, Union
+from typing import Iterable, List, Optional, Sequence, Tuple, Union
 import numpy as np
-from umap import UMAP
 import pandas as pd
 from anndata import AnnData
+
+# loompy, pysam, scrublet and umap are imported inside the functions that use them:
+# together they make up most of the import time, and most calls need only some of them.
 
 
 def check_unique_barcodes(barcodes: pd.Index, source: str) -> None:
@@ -110,10 +110,12 @@ def add_fraction_unspliced(
         raise ValueError("No common barcodes found between counts data and fraction_unspliced.")
 
     if len(common_barcodes) < len(adata.obs.index):
-        print(f"Removing {len(adata.obs.index) - len(common_barcodes)} barcodes without splicing information.")
+        warnings.warn(
+            f"Removing {len(adata.obs.index) - len(common_barcodes)} barcodes without splicing information."
+        )
 
     # Filter adata
-    adata = adata[common_barcodes]
+    adata = adata[common_barcodes].copy()
 
     # Add fraction_unspliced as an observation annotation
     adata.obs["fraction_unspliced"] = fraction_unspliced.loc[common_barcodes]
@@ -159,6 +161,23 @@ def read_count_file(file_path: str) -> AnnData:
     return adata
 
 
+def warn_if_not_counts(adata: AnnData) -> None:
+    """
+    Warn if adata.X does not look like raw counts.
+
+    Parameters:
+        adata (AnnData): AnnData object whose X is checked.
+    """
+    # A sparse matrix keeps its non-zero values in .data
+    values = adata.X.data if hasattr(adata.X, "nnz") else np.asarray(adata.X)
+    sample = np.ravel(values)[:100_000]
+    if sample.size > 0 and not np.all(np.mod(sample, 1) == 0):
+        warnings.warn(
+            "The count matrix holds values that are not whole numbers. QClus expects raw counts; "
+            "normalized or transformed data gives misleading QC metrics and doublet scores."
+        )
+
+
 
 def get_qc_metrics(
     adata: sc.AnnData,
@@ -195,7 +214,10 @@ def get_qc_metrics(
             "the built-in gene sets are human gene symbols."
         )
     if missing_genes:
-        print(f"Warning: The following genes are not in adata.var_names and will be ignored: {missing_genes}")
+        warnings.warn(
+            f"The following genes of gene set '{key_name}' are not in adata.var_names and will be ignored: "
+            f"{missing_genes}"
+        )
 
     # Create a boolean mask for the genes in the gene_set
     adata.var[key_name] = adata.var_names.isin(gene_set)
@@ -257,6 +279,8 @@ def add_qclus_embedding(
     X_scaled = scaler.fit_transform(X_full)
 
     # Compute the UMAP embedding
+    from umap import UMAP
+
     umap_embedding = UMAP(random_state=random_state, n_components=n_components).fit_transform(X_scaled)
 
     return umap_embedding
@@ -290,6 +314,8 @@ def fraction_unspliced_from_loom(loompy_path: str, batch_size: int = 512) -> pd.
         FileNotFoundError: If the Loom file does not exist.
         ValueError: If the cell IDs are not in Velocyto's 'sample:barcode' form.
     """
+    import loompy
+
     if not os.path.exists(loompy_path):
         raise FileNotFoundError(f"The Loom file '{loompy_path}' does not exist.")
 
@@ -385,6 +411,8 @@ def calculate_scrublet(
             "or install python-annoy from conda-forge."
         )
 
+    import scrublet as scr
+
     scrub = scr.Scrublet(adata.X, expected_doublet_rate=expected_rate)
     try:
         scrub.scrub_doublets(
@@ -437,13 +465,12 @@ def do_kmeans(X_full: pd.DataFrame, k: int, n_init: int = 1) -> List[str]:
 
     # Perform k-means clustering
     kmeans = KMeans(n_clusters=k, random_state=0, n_init=n_init)
-    labels = kmeans.fit_predict(X_scaled)
-    X_full['kmeans'] = labels.astype(str)
+    labels = pd.Series(kmeans.fit_predict(X_scaled).astype(str), index=X_full.index)
 
     # Sort clusters by decreasing mean fraction_unspliced
     clusters = []
     for cluster_label in map(str, range(k)):
-        cluster_df = X_full[X_full['kmeans'] == cluster_label]
+        cluster_df = X_full[labels == cluster_label]
         clusters.append((cluster_label, cluster_df['fraction_unspliced'].mean()))
 
     # A cluster that k-means left empty has no mean; it is ordered last
@@ -451,8 +478,37 @@ def do_kmeans(X_full: pd.DataFrame, k: int, n_init: int = 1) -> List[str]:
     cluster_order = {cluster_label: str(idx) for idx, (cluster_label, _) in enumerate(sorted_clusters)}
 
     # Reassign cluster labels based on sorted order
-    X_full['kmeans'] = X_full['kmeans'].map(cluster_order)
-    return X_full['kmeans'].tolist()
+    return labels.map(cluster_order).tolist()
+
+
+def outlier_thresholds(
+    df: pd.DataFrame,
+    unspliced_diff: float,
+    mito_diff: float,
+) -> Tuple[float, float]:
+    """
+    Compute the outlier thresholds for fraction_unspliced and pct_counts_MT.
+
+    The reference cluster is determined as the cluster with the highest mean
+    fraction_unspliced. Outlier thresholds are then computed from this cluster.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing 'fraction_unspliced', 'pct_counts_MT', and 'kmeans'.
+        unspliced_diff (float): Value to subtract from the 25th percentile of fraction_unspliced.
+        mito_diff (float): Value to add to the 75th percentile of pct_counts_MT.
+
+    Returns:
+        Tuple[float, float]: Lower threshold for fraction_unspliced and upper threshold for pct_counts_MT.
+    """
+    # Find the cluster with the highest mean fraction_unspliced
+    cluster_means = df.groupby('kmeans')['fraction_unspliced'].mean()
+    max_unspliced_cluster = cluster_means.idxmax()
+
+    # Use the selected cluster as the reference to calculate thresholds
+    ref_cluster = df[df['kmeans'] == max_unspliced_cluster]
+    unspliced_threshold = ref_cluster['fraction_unspliced'].quantile(0.25) - unspliced_diff
+    mito_threshold = ref_cluster['pct_counts_MT'].quantile(0.75) + mito_diff
+    return unspliced_threshold, mito_threshold
 
 
 def annotate_outliers(
@@ -474,14 +530,7 @@ def annotate_outliers(
     Returns:
         pd.Series: Boolean Series indicating outlier cells (True means outlier).
     """
-    # Find the cluster with the highest mean fraction_unspliced
-    cluster_means = df.groupby('kmeans')['fraction_unspliced'].mean()
-    max_unspliced_cluster = cluster_means.idxmax()
-
-    # Use the selected cluster as the reference to calculate thresholds
-    ref_cluster = df[df['kmeans'] == max_unspliced_cluster]
-    unspliced_threshold = ref_cluster['fraction_unspliced'].quantile(0.25) - unspliced_diff
-    mito_threshold = ref_cluster['pct_counts_MT'].quantile(0.75) + mito_diff
+    unspliced_threshold, mito_threshold = outlier_thresholds(df, unspliced_diff, mito_diff)
 
     # Annotate cells as outliers:
     # A cell is considered "good" (not an outlier) if its fraction_unspliced exceeds the threshold
@@ -534,6 +583,8 @@ def parse_bam_tags(
     Returns:
         Optional[pd.DataFrame]: DataFrame with counts of exon and intron reads per barcode.
     """
+    import pysam
+
     if not isinstance(barcodes, (set, frozenset)):
         barcodes = set(barcodes)
     contig, start, end = interval
@@ -601,6 +652,8 @@ def fraction_unspliced_from_bam(
             reference sequences, or no read matches the barcodes and tags.
         FileNotFoundError: If the BAM file or the given index file does not exist.
     """
+    import pysam
+
     if bam_path is None or barcodes_path is None:
         raise ValueError("Please provide bam_path and barcodes_path.")
 

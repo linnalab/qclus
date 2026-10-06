@@ -8,6 +8,7 @@ QCLUS_TEST_SAMPLE gives the name of the sample:
     <sample>_fraction_unspliced.csv
     qclus_regression/reference_obs.csv.gz
     qclus_regression/reference_extra.csv.gz
+    qclus_regression/reference_umap.npy
     qclus_regression/reference_meta.json
 
 Exact agreement is expected in the environment the reference was captured in. Failure messages
@@ -105,6 +106,7 @@ def test_defaults_change_only_the_doublet_step(reference):
         result.obs.loc[extra.index, "score_scrublet"], extra["score_scrublet_exact"], rtol=0, atol=1e-9
     )
     assert_same_labels(result.obs["qclus"], expected_labels(obs, extra, "qclus_n_init_1_exact"), "QClus labels")
+    np.testing.assert_allclose(result.uns["QClus_umap"], np.load(REFERENCE / "reference_umap.npy"), rtol=0, atol=1e-6)
 
     # The first three filters are untouched: a barcode they removed keeps its label, and no other gets one
     early = ["initial filter", "clustering filter", "outlier filter"]

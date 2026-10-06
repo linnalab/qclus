@@ -1,9 +1,7 @@
-import numpy as np
 import pandas as pd
 import pytest
 
 import qclus as qc
-import qclus.qclus as pipeline
 from conftest import write_dataset
 from synthetic import NUCLEI, make_barcodes
 
@@ -40,9 +38,11 @@ def test_fraction_table_as_dataframe_and_with_suffixes(dataset, default_run):
 
 def test_barcodes_without_splicing_information_are_dropped(dataset, default_run):
     kept = dataset.fraction_unspliced.iloc[::2]
-    result = qc.run_qclus(dataset.counts_path, kept)
+    with pytest.warns(UserWarning, match=f"Removing {len(dataset.fraction_unspliced) - len(kept)} barcodes"):
+        result = qc.run_qclus(dataset.counts_path, kept)
     assert list(result.obs.index) == list(kept.index)
     assert set(result.obs["qclus"]) <= set(default_run.obs["qclus"])
+    assert result.uns["qclus"]["n_barcodes_without_splicing_information"] == len(dataset.fraction_unspliced) - len(kept)
 
 
 def test_no_common_barcodes(dataset):
@@ -98,7 +98,7 @@ def test_invalid_cluster_selection(dataset, selection):
         qc.run_qclus(dataset.counts_path, dataset.fraction_unspliced, clusters_to_select=selection)
 
 
-def test_selected_cluster_left_empty_by_kmeans(tmp_path, dataset, monkeypatch):
+def test_selected_cluster_left_empty_by_kmeans(tmp_path, dataset):
     # Identical droplets give identical feature vectors, so k-means fills a single cluster
     adata = dataset.adata[:1].copy()
     adata = adata[[0] * 20].copy()
@@ -106,7 +106,6 @@ def test_selected_cluster_left_empty_by_kmeans(tmp_path, dataset, monkeypatch):
     path = tmp_path / "identical.h5ad"
     adata.write_h5ad(path)
     fractions = pd.Series(0.8, index=dataset.fraction_unspliced.index[:20])
-    monkeypatch.setattr(pipeline, "add_qclus_embedding", lambda adata, *args, **kwargs: np.zeros((adata.n_obs, 2)))
 
     with pytest.raises(ValueError, match="k-means filled only 1 of 2 clusters"):
         qc.run_qclus(
@@ -116,6 +115,7 @@ def test_selected_cluster_left_empty_by_kmeans(tmp_path, dataset, monkeypatch):
             clustering_k=2,
             clusters_to_select=["1"],
             scrublet_filter=False,
+            compute_embedding=False,
         )
 
 
