@@ -5,7 +5,7 @@ All notable changes to QClus are listed here, newest first.
 
 
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-10-08)
 
 
 The method is unchanged: the same features, the same four filters in the same order, and the same thresholds and gene sets. One default changes results, and it is listed first.
