@@ -28,6 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          # annoy is compiled for the processor it is built on, so a cached build can crash on another runner
+          enable-cache: false
       - name: Install
         run: |
           uv venv --python ${{ matrix.python }}
@@ -40,6 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          # annoy is compiled for the processor it is built on, so a cached build can crash on another runner
+          enable-cache: false
       - name: Build sdist and wheel
         run: uv build
       - name: Check metadata
