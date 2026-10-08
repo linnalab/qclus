@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qclus"
-version = "0.3.0"
+version = "0.3.1.dev0"
 description = "Droplet filtering for single-nucleus RNA-seq data"
 readme = "README.md"
 requires-python = ">=3.11"
