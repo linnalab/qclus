@@ -39,8 +39,9 @@ Some details of velocyto's code change the counts, and are reproduced so that th
 - The last feature (in order of position) of each chromosome strand, and the last masked interval, are never
   searched.
 
-The genome is processed in tiles whose boundaries lie between genes, so that all reads of a molecule, and all reads
-that can validate an intron, reach the same worker. What remains different from velocyto:
+The genome is processed in tiles whose boundaries lie between genes, so that the reads that can validate an
+intron reach the same worker, and so do the reads of almost every molecule. A molecule with a read spliced across
+a tile boundary is combined from the tiles it touches by count_molecules. What remains different from velocyto:
 
 - velocyto keeps the reads of a barcode and UMI together across the whole genome, so a UMI that a barcode uses in two
   genes of different tiles makes one molecule, which it drops; here it makes two. With 12-base UMIs this is rare.
@@ -216,12 +217,15 @@ def read_gene_models(gtf_path: str) -> dict:
                 fields[0], fields[6], int(fields[3]), int(fields[4]), transcript.group(1),
                 gene_index.setdefault(gene.group(1), len(gene_index)),
                 int(number.group(1)) if number is not None else None,
+                line,
             ))
     if not exons:
         raise ValueError(f"'{gtf_path}' holds no exon with a transcript_id and a gene_id.")
 
-    # velocyto sorts the lines as `sort -k1,1 -k7,7 -k4,4n` does, minus strand first
-    exons.sort(key=lambda exon: (exon[0], exon[1] == "+", exon[2], exon[3]))
+    # velocyto sorts the lines as `sort -k1,1 -k7,7 -k4,4n` does, minus strand first, and then by the whole line.
+    # The order of transcripts that start at the same position decides which feature is the last one (see below).
+    exons.sort(key=lambda exon: (exon[0], exon[1] == "+", exon[2], exon[7]))
+    exons = [exon[:7] for exon in exons]
     if any(exon[6] is None for exon in exons):
         # Without exon numbers velocyto numbers the exons of each transcript by position (peek_and_correct)
         position: Dict[tuple, int] = {}
@@ -383,9 +387,9 @@ def read_repeat_mask(mask_path: str) -> Dict[str, Tuple[np.ndarray, np.ndarray]]
 
     result = {}
     for chromstrand, intervals in masks.items():
-        # velocyto never searches the last interval; one whose start lies after its end can contain no read
+        # velocyto never searches the last interval. Intervals whose start lies after their end, left by the
+        # joining at a change of chromosome, contain no read but can still touch one, and are kept.
         intervals = sorted(intervals)[:-1]
-        intervals = [interval for interval in intervals if interval[0] <= interval[1]]
         if intervals:
             array = np.array(intervals, dtype=np.int64)
             result[chromstrand] = (array[:, 0].copy(), array[:, 1].copy())
@@ -460,7 +464,7 @@ def tile_inputs(
                 features[strand] = {name: values[keep] for name, values in arrays.items()}
         if masks is not None and chromosome + strand in masks:
             mask_starts, mask_ends = masks[chromosome + strand]
-            keep = (mask_starts < upper) & (mask_ends > lower)
+            keep = (mask_starts < upper) & (np.maximum(mask_starts, mask_ends) > lower)
             if keep.any():
                 intervals[strand] = (mask_starts[keep], mask_ends[keep])
     return features, intervals
@@ -489,8 +493,8 @@ class _Strand:
 
         self.mask_start = [] if masks is None else masks[0].tolist()
         self.mask_end = [] if masks is None else masks[1].tolist()
-        # Largest start or end of the intervals so far, to stop searching backwards
-        self.mask_reach = np.maximum.accumulate(np.maximum(masks[0], masks[1])).tolist() if masks is not None else []
+        # Largest end of the intervals so far: where velocyto's search starts, and where it can stop
+        self.mask_end_so_far = [] if masks is None else np.maximum.accumulate(masks[1]).tolist()
 
     def candidates(self, pos: int, last: int) -> List[int]:
         """Features that a read from `pos` to `last` may overlap; also features that no later read can reach."""
@@ -504,23 +508,28 @@ class _Strand:
             self.pruned_at = pos
         return self.active
 
-    def masked(self, segments: List[Tuple[int, int]]) -> bool:
+    def masked(self, pos: int, segments: List[Tuple[int, int]]) -> bool:
         """Whether every segment lies inside a masked interval without touching another (indexes.py, has_ivls_enclosing)."""
-        mask_start, mask_end, mask_reach = self.mask_start, self.mask_end, self.mask_reach
+        mask_start, mask_end, end_so_far = self.mask_start, self.mask_end, self.mask_end_so_far
         if not mask_start:
             return False
+        # velocyto searches from the first interval that ends at or after the read's position
+        first = bisect_left(end_so_far, pos)
         for s, e in segments:
             found = 0
-            # Intervals that start before the segment ends; those reaching no further than `stop` cannot matter
+            inner_s, inner_e = s + MIN_FLANK, e - MIN_FLANK
+            stop = min(inner_e, inner_s + 1)
+            # Intervals that start before the segment ends, searched backwards
             k = bisect_left(mask_start, e) - 1
-            stop = min(e - MIN_FLANK, s + MIN_FLANK + 1)
-            while k >= 0 and mask_reach[k] >= stop:
+            while k >= first:
                 ms, me = mask_start[k], mask_end[k]
-                if s + MIN_FLANK >= ms and e - MIN_FLANK <= me and e - s > MIN_FLANK:
+                if end_so_far[k] < stop and ms <= inner_s:
+                    break  # neither this interval nor an earlier one can contain or touch the segment
+                if inner_s >= ms and inner_e <= me and e - s > MIN_FLANK:
                     found |= 1
-                if s + MIN_FLANK < ms < e - MIN_FLANK:
+                if inner_s < ms < inner_e:
                     found |= 2
-                if s + MIN_FLANK < me < e - MIN_FLANK:
+                if inner_s < me < inner_e:
                     found |= 4
                 k -= 1
             if found != MATCH_INSIDE:
@@ -670,9 +679,13 @@ def count_tile(
     UB_tag: str = "UB",
     bam_index_path: Optional[str] = None,
     count_by_start: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[tuple, frozenset], set]:
     """
     Count the spliced, unspliced and ambiguous molecules of each barcode in one genomic region.
+
+    With count_by_start, a read that crosses a boundary of the region (a splice across the gap between two genes)
+    may share its molecule with reads of the next region. Such molecules are not counted here but returned, with
+    the introns this region validated, for count_molecules to combine.
 
     Parameters:
         interval (tuple): (contig, start, end), 0-based and half-open.
@@ -686,8 +699,9 @@ def count_tile(
         count_by_start (bool, optional): If True, use only reads that start inside the region.
 
     Returns:
-        Tuple[np.ndarray, np.ndarray, np.ndarray]: Rows of the barcodes with a read that velocyto reads; rows of
-            the barcodes with counted molecules; and their counts (one column per class of LAYERS).
+        Tuple: Rows of the barcodes with a read that velocyto reads; rows of the barcodes with counted molecules;
+            their counts (one column per class of LAYERS); the molecules left to combine, by (row, UMI), with
+            their introns named (model, start, end); and the introns validated here, if there are such molecules.
     """
     import pysam
 
@@ -703,6 +717,8 @@ def count_tile(
 
     seen = set()
     molecules: Dict[tuple, frozenset] = {}
+    # Molecules with a read across a boundary of the region
+    crossing: set = set()
     validated: set = set()
     merged_records: Dict[tuple, frozenset] = {}
     # Rows of the cell barcode tags seen so far, None for barcodes not in the list
@@ -714,8 +730,6 @@ def count_tile(
     with pysam.AlignmentFile(bam_path, "rb", index_filename=bam_index_path) as bam_file:
         for read in bam_file.fetch(contig, start, end):
             reference_start = read.reference_start
-            if count_by_start and reference_start < start:
-                continue
             if read.is_unmapped:
                 continue
             try:
@@ -733,6 +747,10 @@ def count_tile(
                 row = tag_rows[barcode] = barcodes.get(barcode.split("-")[0])
             if row is None:
                 continue
+            if count_by_start and reference_start < start:
+                # A read of the region before, which reaches into this one
+                crossing.add((row, umi))
+                continue
 
             if reference_start != cache_position:
                 cache.clear()
@@ -740,8 +758,9 @@ def count_tile(
             is_reverse = read.is_reverse
             key = (is_reverse, read.cigarstring)
             if key in cache:
-                record = cache[key]
+                record, crosses = cache[key]
             else:
+                crosses = count_by_start and read.reference_end > end
                 segments, spliced = parse_cigar(read.cigartuples, reference_start + 1)
                 if not segments or segments[-1][1] - segments[0][0] + 1 > LONGEST_READ_SPAN:
                     record = None
@@ -750,16 +769,18 @@ def count_tile(
                 else:
                     strand = strands[is_reverse]
                     record = strand.match(reference_start + 1, segments, spliced, validated)
-                    if record and strand.masked(segments):
+                    if record and strand.masked(reference_start + 1, segments):
                         record = EMPTY
-                cache[key] = record
+                cache[key] = (record, crosses)
             if record is None:
                 continue
             seen.add(row)
+            molecule = (row, umi)
+            if crosses:
+                crossing.add(molecule)
             if not record:
                 continue
 
-            molecule = (row, umi)
             current = molecules.get(molecule)
             if current is None:
                 molecules[molecule] = record
@@ -770,6 +791,23 @@ def count_tile(
                     combined = _merge(current, record)
                     combined = merged_records[pair] = records.setdefault(combined, combined)
                 molecules[molecule] = combined
+
+    deferred: Dict[tuple, frozenset] = {}
+    validated_names: set = set()
+    if crossing:
+        def name(f):
+            strand = strands[0] if f < offset else strands[1]
+            f -= strand.offset
+            return strand.model[f], strand.start[f], strand.end[f]
+
+        for molecule in crossing:
+            record = molecules.pop(molecule, None)
+            if record is not None:
+                deferred[molecule] = frozenset(
+                    (tm, gene, has_exon, frozenset((name(f), crosses) for f, crosses in introns))
+                    for tm, gene, has_exon, introns in record
+                )
+        validated_names = {name(f) for f in validated}
 
     counts: Dict[int, List[int]] = {}
     classes: Dict[int, Optional[int]] = {}
@@ -783,7 +821,7 @@ def count_tile(
 
     rows = np.fromiter(counts.keys(), dtype=np.int64, count=len(counts))
     values = np.array(list(counts.values()), dtype=np.int64).reshape(-1, 3)
-    return np.fromiter(seen, dtype=np.int64, count=len(seen)), rows, values
+    return np.fromiter(seen, dtype=np.int64, count=len(seen)), rows, values, deferred, validated_names
 
 
 def count_molecules(
@@ -855,11 +893,19 @@ def count_molecules(
 
         seen = np.zeros(len(names), dtype=bool)
         counts = np.zeros((len(names), len(LAYERS)), dtype=np.int64)
+        # Molecules with reads in more than one tile, combined as velocyto combines the reads of a molecule, and
+        # the introns validated in the tiles they come from
+        deferred: Dict[tuple, frozenset] = {}
+        validated: set = set()
 
         def add(result):
-            seen_rows, count_rows, values = result
+            seen_rows, count_rows, values, tile_deferred, tile_validated = result
             seen[seen_rows] = True
             counts[count_rows] += values  # a barcode appears once per tile
+            validated.update(tile_validated)
+            for molecule, record in tile_deferred.items():
+                current = deferred.get(molecule)
+                deferred[molecule] = record if current is None else _merge(current, record)
 
         progress = tqdm(total=len(regions), desc="Processing BAM tiles", unit="tile")
         if executor is None:
@@ -880,5 +926,12 @@ def count_molecules(
                 add(future.result())
                 progress.update()
         progress.close()
+
+        for (row, _), record in deferred.items():
+            layer = classify(record, validated)
+            if layer is not None:
+                counts[row, layer] += 1
+        if deferred:
+            logger.info("%d molecules had reads in more than one tile.", len(deferred))
 
         return pd.DataFrame(counts[seen], index=pd.Index(np.array(names, dtype=object)[seen]), columns=list(LAYERS))

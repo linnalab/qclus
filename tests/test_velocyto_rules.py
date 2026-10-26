@@ -72,33 +72,33 @@ RULES = {
 BARCODES = {name: barcode(i + 1) for i, name in enumerate(RULES)}
 
 
-@pytest.fixture(scope="module")
-def rules_files(tmp_path_factory):
-    directory = tmp_path_factory.mktemp("rules")
+def write_case(directory, genes, repeats, reads, contigs, barcodes):
+    """
+    Write a BAM file with its gene models, repeats and barcodes.
+
+    genes: (contig, strand, gene, transcript, exons); repeats: (contig, strand, start, end); reads: (contig, start
+    (1-based), CIGAR, reverse, tags); contigs: (name, length).
+    """
+    directory = Path(directory)
     lines = []
-    for contig, strand, gene, transcript, exons in GTF:
+    for contig, strand, gene, transcript, exons in genes:
         for number, (start, end) in enumerate(exons if strand == "+" else exons[::-1], start=1):
             tags = f'gene_id "{gene}"; transcript_id "{transcript}"; exon_number "{number}";'
             lines.append(f"{contig}\ttest\texon\t{start}\t{end}\t.\t{strand}\t.\t{tags}")
     (directory / "genes.gtf").write_text("\n".join(lines) + "\n")
     (directory / "rmsk.gtf").write_text("".join(
         f'{contig}\trmsk\texon\t{start}\t{end}\t.\t{strand}\t.\tgene_id "R{i}"; transcript_id "R{i}";\n'
-        for i, (contig, strand, start, end) in enumerate(MASK)
+        for i, (contig, strand, start, end) in enumerate(repeats)
     ))
 
     header = pysam.AlignmentHeader.from_dict({
         "HD": {"VN": "1.6", "SO": "coordinate"},
-        "SQ": [{"SN": "chr1", "LN": 20_000}, {"SN": "chrM", "LN": 16_569}, {"SN": "chrX", "LN": 1_000}],
+        "SQ": [{"SN": name, "LN": length} for name, length in contigs],
     })
-    reads = []
-    for name, rule_reads in RULES.items():
-        for start, cigar, reverse, extra in rule_reads:
-            tags = {"CB": BARCODES[name] + "-1", "UB": "UMI1", "NH": 1}
-            tags.update({key: value for key, value in extra.items() if key != "contig"})
-            reads.append((extra.get("contig", "chr1"), start, cigar, reverse, tags))
+    order = {name: i for i, (name, _) in enumerate(contigs)}
     path = directory / "possorted_genome_bam.bam"
     with pysam.AlignmentFile(str(path), "wb", header=header) as handle:
-        for i, (contig, start, cigar, reverse, tags) in enumerate(sorted(reads, key=lambda r: (r[0] != "chr1", r[0], r[1]))):
+        for i, (contig, start, cigar, reverse, tags) in enumerate(sorted(reads, key=lambda r: (order[r[0]], r[1]))):
             read = pysam.AlignedSegment(header)
             read.query_name = f"read{i}"
             read.reference_id = header.get_tid(contig)
@@ -114,9 +114,21 @@ def rules_files(tmp_path_factory):
                     read.set_tag(tag, value)
             handle.write(read)
     pysam.index(str(path))
-    (directory / "barcodes.tsv").write_text("".join(f"{b}-1\n" for b in BARCODES.values()))
+    (directory / "barcodes.tsv").write_text("".join(f"{b}-1\n" for b in barcodes))
     return {name: str(directory / file) for name, file in (
         ("bam", "possorted_genome_bam.bam"), ("barcodes", "barcodes.tsv"), ("gtf", "genes.gtf"), ("mask", "rmsk.gtf"))}
+
+
+@pytest.fixture(scope="module")
+def rules_files(tmp_path_factory):
+    reads = []
+    for name, rule_reads in RULES.items():
+        for start, cigar, reverse, extra in rule_reads:
+            tags = {"CB": BARCODES[name] + "-1", "UB": "UMI1", "NH": 1}
+            tags.update({key: value for key, value in extra.items() if key != "contig"})
+            reads.append((extra.get("contig", "chr1"), start, cigar, reverse, tags))
+    contigs = [("chr1", 20_000), ("chrM", 16_569), ("chrX", 1_000)]
+    return write_case(tmp_path_factory.mktemp("rules"), GTF, MASK, reads, contigs, BARCODES.values())
 
 
 @pytest.fixture(scope="module")
@@ -324,3 +336,62 @@ def test_command_line(rules_files, tmp_path, capsys):
     # The table is read by `qclus run` like any other
     fraction = utils.prepare_fraction_unspliced(written)
     assert np.isclose(fraction[BARCODES["all_classes"]], 0.25)
+
+
+def case_counts(paths, **arguments):
+    result = utils.fraction_unspliced_from_bam(
+        bam_path=paths["bam"], barcodes_path=paths["barcodes"], gtf_path=paths["gtf"], cores=1, **arguments)
+    return tuple(int(x) for x in result.loc[barcode(1), list(velocyto_rules.LAYERS)])
+
+
+def test_molecule_spliced_across_a_tile_boundary_counts_once(tmp_path):
+    # GENE-B starts at 5001; with two tiles the boundary falls at 4501, in the gap before it. The first read starts
+    # in the gap and is spliced into GENE-B's first exon; the second, of the same molecule, crosses that exon's end.
+    genes = [
+        ("chr1", "+", "GENE-A", "TA", [(1001, 3000)]),
+        ("chr1", "+", "GENE-B", "TB", [(5001, 5100), (5501, 6000)]),
+        ("chr1", "+", "LAST", "TL", [(9001, 9100)]),
+    ]
+    tags = {"CB": barcode(1) + "-1", "UB": "UMI1", "NH": 1}
+    reads = [("chr1", 4001, "50M950N40M", False, tags), ("chr1", 5051, "90M", False, tags)]
+    paths = write_case(tmp_path, genes, [], reads, [("chr1", 10_000)], [barcode(1)])
+    with pysam.AlignmentFile(paths["bam"]) as handle:
+        models = velocyto_rules.read_gene_models(paths["gtf"])
+        regions = velocyto_rules.tiles_between_genes(handle.references, handle.lengths, models["blocks"], 2)
+    assert regions == [("chr1", 0, 4501), ("chr1", 4501, 10_000)]
+    # velocyto: one molecule, unspliced
+    assert case_counts(paths, tiles=1) == case_counts(paths, tiles=2) == (0, 1, 0)
+
+
+def test_transcripts_that_start_together_are_ordered_by_their_gtf_lines(tmp_path):
+    # T-A and T-B share their first and last exons; velocyto never searches the last feature of a chromosome
+    # strand, which is the last exon of the transcript that sorts last by its GTF line, T-B. The molecule's first
+    # read is exonic in T-A and intronic in T-B, its second lies in the last exon: velocyto counts it spliced.
+    genes = [
+        ("chr1", "+", "GENE", "T-B", [(1001, 1100), (3001, 3100), (9001, 9100)]),
+        ("chr1", "+", "GENE", "T-A", [(1001, 1100), (2001, 2100), (9001, 9100)]),
+    ]
+    tags = {"CB": barcode(1) + "-1", "UB": "UMI1", "NH": 1}
+    reads = [("chr1", 2011, "90M", False, tags), ("chr1", 9011, "90M", False, tags)]
+    paths = write_case(tmp_path, genes, [], reads, [("chr1", 10_000)], [barcode(1)])
+    assert case_counts(paths) == (1, 0, 0)
+
+
+def test_interval_inverted_by_a_change_of_chromosome_still_touches_reads(tmp_path):
+    # The minus strand's last repeat (2000, 2100) moves on to the plus strand, where it is joined to the first
+    # repeat and becomes (2000, 200). A read inside (1900, 2200) that crosses position 2000 then touches that
+    # interval, and velocyto does not mask it.
+    repeats = [
+        ("chr1", "-", 2000, 2100),
+        ("chr1", "+", 150, 200), ("chr1", "+", 300, 400), ("chr1", "+", 1900, 2200), ("chr1", "+", 3000, 3100),
+        ("chr1", "+", 5000, 5100),
+        ("chr2", "+", 1, 10),
+    ]
+    path = tmp_path / "rmsk.gtf"
+    path.write_text("".join(f"{c}\tr\texon\t{s}\t{e}\t.\t{strand}\t.\tx\n" for c, strand, s, e in repeats))
+    masks = velocyto_rules.read_repeat_mask(str(path))
+    starts, ends = masks["1+"]
+    assert list(zip(starts.tolist(), ends.tolist())) == [(300, 400), (1900, 2200), (2000, 200)]
+    strand = velocyto_rules._Strand(None, masks["1+"], 0, {})
+    assert not strand.masked(1980, [(1980, 2069)])
+    assert strand.masked(2051, [(2051, 2140)])
