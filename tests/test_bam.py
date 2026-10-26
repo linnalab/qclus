@@ -99,6 +99,12 @@ def test_index_under_another_name_reaches_the_workers(bam, tmp_path):
     assert result.loc[name(SPANNING), "fraction_unspliced"] == pytest.approx(2 / 3)
 
 
+def test_counting_by_region_tag_warns_that_it_differs_from_velocyto(bam):
+    bam_path, barcodes_path = bam
+    with pytest.warns(UserWarning, match="higher than velocyto's fraction"):
+        utils.fraction_unspliced_from_bam(bam_path=bam_path, barcodes_path=barcodes_path, tiles=10, cores=1)
+
+
 def test_no_matching_barcodes(bam, tmp_path):
     bam_path, _ = bam
     barcodes = tmp_path / "barcodes.tsv"

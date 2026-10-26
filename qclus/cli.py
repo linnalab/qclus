@@ -177,22 +177,34 @@ def build_parser() -> argparse.ArgumentParser:
         "splicing-from-bam",
         parents=[common],
         help="Calculate fraction_unspliced from a 10X BAM file.",
-        description="Calculate the fraction of unspliced reads per barcode from the region tags of a 10X BAM file.",
+        description="Calculate the fraction of unspliced reads per barcode from a 10X BAM file. With --gtf, molecules "
+                    "are counted with the rules of velocyto run10x, which QClus was tuned on; without it, alignments "
+                    "are counted by their region tag, which gives higher fractions.",
     )
     bam.set_defaults(handler=bam_command)
     bam.add_argument("--bam", required=True, metavar="FILE", help="Position-sorted BAM file from Cell Ranger.")
     bam.add_argument("--barcodes", required=True, metavar="FILE", help="Barcodes to count reads for, one per line (barcodes.tsv.gz).")
     bam.add_argument("-o", "--output", required=True, metavar="FILE", help="Table to write (.csv or .tsv), as read by 'qclus run'.")
+    bam.add_argument("--gtf", metavar="FILE",
+                     help="GTF file of the reference the reads were aligned to (genes/genes.gtf of the Cell Ranger "
+                          "reference). Counts spliced, unspliced and ambiguous molecules with velocyto's rules, and "
+                          "writes them to the table too.")
+    bam.add_argument("--repeat-mask", metavar="FILE",
+                     help="GTF file of repeats to mask, as given to velocyto with -m (RepeatMasker's track from UCSC). "
+                          "Needs --gtf.")
     bam.add_argument("--bam-index", metavar="FILE", help="BAM index. Default: found next to the BAM file.")
     bam.add_argument("--tiles", type=int, default=bam_defaults["tiles"].default, metavar="N",
                      help="Number of genomic tiles processed in parallel. Default: %(default)s.")
     bam.add_argument("--cores", type=int, metavar="N", help="CPU cores to use. Default: all but one of those available.")
     bam.add_argument("--cb-tag", default=bam_defaults["CB_tag"].default, metavar="TAG", help="Cell barcode tag. Default: %(default)s.")
-    bam.add_argument("--re-tag", default=bam_defaults["RE_tag"].default, metavar="TAG", help="Region type tag. Default: %(default)s.")
+    bam.add_argument("--ub-tag", default=bam_defaults["UB_tag"].default, metavar="TAG",
+                     help="UMI tag, used with --gtf. Default: %(default)s.")
+    bam.add_argument("--re-tag", default=bam_defaults["RE_tag"].default, metavar="TAG",
+                     help="Region type tag, used without --gtf. Default: %(default)s.")
     bam.add_argument("--exon-tag", default=bam_defaults["EXON_tag"].default, metavar="VALUE",
-                     help="Value of the region type tag for exonic reads. Default: %(default)s.")
+                     help="Value of the region type tag for exonic reads, used without --gtf. Default: %(default)s.")
     bam.add_argument("--intron-tag", default=bam_defaults["INTRON_tag"].default, metavar="VALUE",
-                     help="Value of the region type tag for intronic reads. Default: %(default)s.")
+                     help="Value of the region type tag for intronic reads, used without --gtf. Default: %(default)s.")
 
     # ------------------------------------------------------------------ qclus splicing-from-loom
     loom = commands.add_parser(
@@ -317,6 +329,11 @@ def run_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> in
 
 def bam_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     inputs = {"--bam": args.bam, "--barcodes": args.barcodes}
+    for option, path in (("--gtf", args.gtf), ("--repeat-mask", args.repeat_mask)):
+        if path is not None:
+            inputs[option] = path
+    if args.repeat_mask is not None and args.gtf is None:
+        parser.error("--repeat-mask needs --gtf")
     if args.bam_index is not None:
         inputs["--bam-index"] = args.bam_index
     else:
@@ -339,6 +356,9 @@ def bam_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> in
         RE_tag=args.re_tag,
         EXON_tag=args.exon_tag,
         INTRON_tag=args.intron_tag,
+        gtf_path=args.gtf,
+        repeat_mask_path=args.repeat_mask,
+        UB_tag=args.ub_tag,
     )
     result.to_csv(args.output, sep=separator(args.output))
     print(f"barcodes\t{len(result)}")

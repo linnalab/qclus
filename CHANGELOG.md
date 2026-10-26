@@ -5,6 +5,26 @@ All notable changes to QClus are listed here, newest first.
 
 
 
+## Unreleased
+
+
+
+### Added
+
+
+- **`fraction_unspliced_from_bam` can count molecules with velocyto's rules.** Given `gtf_path` (`--gtf`), it counts spliced, unspliced and ambiguous molecules as `velocyto run10x` 0.17.17 does with its default logic, and `repeat_mask_path` (`--repeat-mask`) masks repeats as `velocyto run10x -m` does. The fraction is unspliced / (spliced + unspliced + ambiguous), as from a loom file, and the table also holds the three counts. On synthetic BAM files with random gene models and repeats the counts are identical to those of velocyto's own code. The BAM file is read as it is, in tiles whose boundaries lie between genes, without velocyto's sorting by barcode or its gene by barcode matrices.
+
+- `UB_tag` (`--ub-tag`) names the UMI tag.
+
+
+
+### Changed
+
+
+- Without `gtf_path`, `fraction_unspliced_from_bam` counts alignments by their region tag as before, and now warns that the fraction is higher than velocyto's. On 75 ENCODE heart samples it was 0.058 higher (median), and QClus passed a median of 10% more nuclei with it.
+
+
+
 ## 0.3.0 (2026-10-08)
 
 

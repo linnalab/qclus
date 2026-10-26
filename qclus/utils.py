@@ -625,13 +625,26 @@ def fraction_unspliced_from_bam(
     RE_tag: str = "RE",
     EXON_tag: str = "E",
     INTRON_tag: str = "N",
+    gtf_path: Optional[str] = None,
+    repeat_mask_path: Optional[str] = None,
+    UB_tag: str = "UB",
 ) -> Optional[pd.DataFrame]:
     """
     Calculate the fraction of unspliced reads per cell from a BAM file.
 
+    With gtf_path, molecules are counted with the rules of velocyto (`velocyto run10x`, which QClus was tuned on;
+    see qclus.velocyto_rules): unique alignments with a cell barcode and a UMI are grouped into molecules, which
+    are classed as spliced, unspliced or ambiguous from the gene models of the GTF file, on the read's strand.
+    Reads inside the repeats of repeat_mask_path are left out, as `velocyto run10x -m` does. The fraction is
+    unspliced / (spliced + unspliced + ambiguous), as in fraction_unspliced_from_loom.
+
+    Without gtf_path, every alignment is counted by its region tag (RE_tag), and the fraction is intronic /
+    (exonic + intronic) alignments. This is faster, but on heart nuclei it is about 0.06 higher than velocyto's
+    fraction, which changes the labels of QClus's outlier filter.
+
     By default the genome is split into tiles that do not overlap, and every read is counted once,
-    in the tile that contains its start. If regions are given, every read overlapping a region is
-    counted for that region, so a read overlapping two regions is counted in both.
+    in the tile that contains its start; with gtf_path, tile boundaries lie between genes. If regions are given,
+    every read overlapping a region is counted for that region, so a read overlapping two regions is counted in both.
 
     Parameters:
         bam_path (str, optional): Path to the BAM file.
@@ -641,12 +654,18 @@ def fraction_unspliced_from_bam(
         tiles (int, optional): Number of genomic regions to process in parallel.
         cores (int, optional): Number of CPU cores to use.
         CB_tag (str, optional): Tag for cell barcode in BAM file.
-        RE_tag (str, optional): Tag for region type in BAM file.
-        EXON_tag (str, optional): Tag indicating exon region.
-        INTRON_tag (str, optional): Tag indicating intron region.
+        RE_tag (str, optional): Tag for region type in BAM file. Not used with gtf_path.
+        EXON_tag (str, optional): Tag indicating exon region. Not used with gtf_path.
+        INTRON_tag (str, optional): Tag indicating intron region. Not used with gtf_path.
+        gtf_path (str, optional): GTF file of the reference the reads were aligned to, optionally gzipped, such as
+            genes/genes.gtf of the Cell Ranger reference. Counts molecules with velocyto's rules.
+        repeat_mask_path (str, optional): GTF file of repeats to mask, such as RepeatMasker's track from UCSC.
+            Needs gtf_path.
+        UB_tag (str, optional): Tag for the UMI in BAM file. Used with gtf_path.
 
     Returns:
-        Optional[pd.DataFrame]: DataFrame containing the fraction of unspliced reads per cell.
+        Optional[pd.DataFrame]: DataFrame containing the fraction of unspliced reads per cell. With gtf_path it
+            also holds the number of spliced, unspliced and ambiguous molecules.
 
     Raises:
         ValueError: If a required path is missing, tiles is less than 1, the BAM header lists no
@@ -664,6 +683,13 @@ def fraction_unspliced_from_bam(
     if bam_index_path is not None and not os.path.exists(bam_index_path):
         raise FileNotFoundError(f"The BAM index file '{bam_index_path}' does not exist.")
 
+    for name, path in (("GTF", gtf_path), ("repeat mask", repeat_mask_path)):
+        if path is not None and not os.path.exists(path):
+            raise FileNotFoundError(f"The {name} file '{path}' does not exist.")
+
+    if repeat_mask_path is not None and gtf_path is None:
+        raise ValueError("repeat_mask_path needs gtf_path: repeats are masked only when molecules are counted.")
+
     if tiles < 1:
         raise ValueError(f"tiles must be at least 1, got {tiles}.")
 
@@ -674,6 +700,18 @@ def fraction_unspliced_from_bam(
 
     if cores is None:
         cores = max(1, available_cpus() - 1)
+
+    if gtf_path is not None:
+        return _fraction_unspliced_by_velocyto_rules(
+            bam_path, bam_index_path, barcodes_path, list(barcode_df[0]), gtf_path, repeat_mask_path,
+            regions, tiles, cores, CB_tag, UB_tag,
+        )
+
+    warnings.warn(
+        "Without gtf_path, the fraction counts every alignment by its region tag. On heart nuclei it is about 0.06 "
+        "higher than velocyto's fraction, which QClus was tuned on, and more barcodes pass the outlier filter. "
+        "Give the GTF file of the reference (and a repeat mask) to count molecules with velocyto's rules."
+    )
 
     # Reads are assigned to generated tiles by their start; user-supplied regions count overlaps
     count_by_start = regions is None
@@ -728,3 +766,39 @@ def fraction_unspliced_from_bam(
     final_df.index = [index.split('-')[0] for index in final_df.index]
 
     return final_df[['fraction_unspliced']]
+
+
+def _fraction_unspliced_by_velocyto_rules(
+    bam_path: str,
+    bam_index_path: Optional[str],
+    barcodes_path: str,
+    barcodes: List[str],
+    gtf_path: str,
+    repeat_mask_path: Optional[str],
+    regions: Optional[List[tuple]],
+    tiles: int,
+    cores: int,
+    CB_tag: str,
+    UB_tag: str,
+) -> pd.DataFrame:
+    """The gtf_path branch of fraction_unspliced_from_bam."""
+    from qclus.velocyto_rules import LAYERS, count_molecules
+
+    counts = count_molecules(
+        bam_path, barcodes, gtf_path, repeat_mask_path=repeat_mask_path, regions=regions, tiles=tiles,
+        cores=cores, CB_tag=CB_tag, UB_tag=UB_tag, bam_index_path=bam_index_path,
+    )
+    if counts.empty:
+        raise ValueError(
+            f"No unique read in '{bam_path}' with a {CB_tag} and a {UB_tag} tag matched a barcode from "
+            f"'{barcodes_path}'. Check the tag names (CB_tag='{CB_tag}', UB_tag='{UB_tag}')."
+        )
+    total_counts = counts[list(LAYERS)].sum(axis=1)
+    if total_counts.sum() == 0:
+        raise ValueError(
+            f"No molecule in '{bam_path}' could be assigned to a gene of '{gtf_path}'. Check that the GTF file "
+            "belongs to the reference the reads were aligned to, with the same chromosome names."
+        )
+    # A barcode without any counted molecule gets 0, as in fraction_unspliced_from_loom
+    counts['fraction_unspliced'] = (counts['unspliced'] / total_counts).fillna(0)
+    return counts
