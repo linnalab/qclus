@@ -395,3 +395,20 @@ def test_interval_inverted_by_a_change_of_chromosome_still_touches_reads(tmp_pat
     strand = velocyto_rules._Strand(None, masks["1+"], 0, {})
     assert not strand.masked(1980, [(1980, 2069)])
     assert strand.masked(2051, [(2051, 2140)])
+
+
+def test_read_from_the_tile_before_validates_introns_here(tmp_path):
+    # An unspliced read from 4401 with a long deletion reaches across the boundary at 4501 and crosses the end of
+    # GENE-B's first exon into its intron, which validates that intron for the molecules of the second tile too
+    genes = [
+        ("chr1", "+", "GENE-A", "TA", [(1001, 3000)]),
+        ("chr1", "+", "GENE-B", "TB", [(5001, 5100), (5501, 6000)]),
+        ("chr1", "+", "LAST", "TL", [(9001, 9100)]),
+    ]
+    tags = {"CB": barcode(1) + "-1", "UB": "UMI1", "NH": 1}
+    reads = [("chr1", 4401, "50M610D50M", False, tags)]
+    paths = write_case(tmp_path, genes, [], reads, [("chr1", 10_000)], [barcode(1)])
+    models = velocyto_rules.read_gene_models(paths["gtf"])
+    features, masks = velocyto_rules.tile_inputs(models, None, "chr1", 4501, 10_000, True)
+    *_, validated = velocyto_rules.count_tile(("chr1", 4501, 10_000), paths["bam"], {barcode(1): 0}, features, masks)
+    assert [(start, end) for _, start, end in validated] == [(5101, 5500)]

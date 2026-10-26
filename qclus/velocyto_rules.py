@@ -748,8 +748,13 @@ def count_tile(
             if row is None:
                 continue
             if count_by_start and reference_start < start:
-                # A read of the region before, which reaches into this one
+                # A read of the region before, which reaches into this one. It is counted there, but its molecule
+                # is completed by count_molecules, and an unspliced read can validate an intron here.
                 crossing.add((row, umi))
+                if has_features:
+                    segments, spliced = parse_cigar(read.cigartuples, reference_start + 1)
+                    if segments and not spliced and segments[-1][1] - segments[0][0] + 1 <= LONGEST_READ_SPAN:
+                        strands[read.is_reverse].match(reference_start + 1, segments, spliced, validated)
                 continue
 
             if reference_start != cache_position:
