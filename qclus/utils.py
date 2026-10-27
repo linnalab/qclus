@@ -446,7 +446,7 @@ def calculate_scrublet(
     return doublet_scores
 
 
-def do_kmeans(X_full: pd.DataFrame, k: int, n_init: int = 1) -> List[str]:
+def do_kmeans(X_full: pd.DataFrame, k: int, n_init: int = 10) -> List[str]:
     """
     Perform k-means clustering and sort clusters by decreasing mean fraction_unspliced.
 
