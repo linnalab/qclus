@@ -5,14 +5,14 @@ All notable changes to QClus are listed here, newest first.
 
 
 
-## Unreleased
+## 0.4.0 (2026-10-27)
 
 
 
 ### Added
 
 
-- **`fraction_unspliced_from_bam` can count molecules with velocyto's rules.** Given `gtf_path` (`--gtf`), it counts spliced, unspliced and ambiguous molecules as `velocyto run10x` 0.17.17 does with its default logic, and `repeat_mask_path` (`--repeat-mask`) masks repeats as `velocyto run10x -m` does. The fraction is unspliced / (spliced + unspliced + ambiguous), as from a loom file, and the table also holds the three counts. On synthetic BAM files with random gene models and repeats, and on 75 ENCODE heart samples, the counts are identical to velocyto's for every barcode. On the ENCODE samples it took a median of 11 minutes and 4.1 GB of memory with 8 cores, where velocyto took 2.2 hours and 36 GB. The BAM file is read as it is, in tiles whose boundaries lie between genes, without velocyto's sorting by barcode or its gene by barcode matrices; the reads of a barcode and UMI are still combined across tiles as velocyto combines them, so a UMI that a barcode uses in two distant genes is not counted.
+- **`fraction_unspliced_from_bam` can count molecules with velocyto's rules.** Given `gtf_path` (`--gtf`), it counts spliced, unspliced and ambiguous molecules as `velocyto run10x` 0.17.17 does with its default logic, and `repeat_mask_path` (`--repeat-mask`) masks repeats as `velocyto run10x -m` does. The fraction is unspliced / (spliced + unspliced + ambiguous), as from a loom file, and the table also holds the three counts. On synthetic BAM files with random gene models and repeats, and on 75 ENCODE heart samples, the counts are identical to velocyto's for every barcode. On the ENCODE samples it took a median of 11 minutes and 4.1 GB of memory with 8 cores, where velocyto took 2.2 hours and 36 GB; `validation/encode_velocyto/` has the results per sample. The BAM file is read as it is, in tiles whose boundaries lie between genes, without velocyto's sorting by barcode or its gene by barcode matrices; the reads of a barcode and UMI are still combined across tiles as velocyto combines them, so a UMI that a barcode uses in two distant genes is not counted.
 
 - `UB_tag` (`--ub-tag`) names the UMI tag.
 
