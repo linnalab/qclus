@@ -67,6 +67,8 @@ If you have previously run Velocyto for your data, we have a tutorial for you! M
 
 If you do not have the necessary values from the methods above, we have implemented our own method for calculating unspliced fraction directly from your 10X bam files! Move to the [splicing_from_bam.ipynb notebook](https://github.com/linnalab/qclus/blob/main/tutorials/splicing_from_bam.ipynb), which will show you how to get the unspliced values from the bam files.
 
+Give it the GTF file of the reference the reads were aligned to (`genes/genes.gtf` of the Cell Ranger reference), and, as for `velocyto run10x -m`, a repeat mask (RepeatMasker's track from the UCSC Table Browser, as GTF). It then counts spliced, unspliced and ambiguous molecules with the rules of velocyto, which QClus's thresholds were tuned on, from the BAM file as it is: it needs neither velocyto's sorting by barcode nor its memory. Without a GTF file it counts alignments by Cell Ranger's region tag, which is faster but gives fractions about 0.06 higher than velocyto's on heart nuclei, so that more of them pass the outlier filter.
+
 ### QClus quickstart
 
 From here you can run the `quickstart_qclus` function. For cardiac data, the function runs QClus with the settings of the original publication, with one difference: doublet scores are now calculated with exact instead of approximate nearest neighbours. Pass `scrublet_approx_neighbors=True` to use the approximate search of earlier versions.
@@ -115,6 +117,8 @@ The fraction of unspliced reads can be calculated from the command line as well:
 qclus splicing-from-bam \
     --bam possorted_genome_bam.bam \
     --barcodes filtered_feature_bc_matrix/barcodes.tsv.gz \
+    --gtf refdata-gex-GRCh38-2020-A/genes/genes.gtf \
+    --repeat-mask hg38_rmsk.gtf \
     --output fraction_unspliced.csv
 
 qclus splicing-from-loom --loom sample.loom --output fraction_unspliced.csv
