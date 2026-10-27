@@ -45,7 +45,7 @@ qclus splicing-from-bam --bam outs/possorted_genome_bam.bam \
 The counter without a GTF file is QClus 0.3.0 with the same command, without `--gtf` and `--repeat-mask`.
 
 
-QClus 0.3.0 then ran with its default settings on each fraction, and the labels were compared barcode by barcode. Every job had 8 cores on a Slurm cluster. The scripts that ran the jobs are specific to that cluster and are not included.
+QClus 0.3.0 then ran with its default settings on each fraction, and the labels were compared barcode by barcode. velocyto and the counter had 8 cores per job on a Slurm cluster. The scripts that ran the jobs are specific to that cluster and are not included.
 
 
 
