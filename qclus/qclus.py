@@ -73,7 +73,7 @@ def run_qclus(
     outlier_filter: bool = True,
     outlier_unspliced_diff: float = 0.1,
     outlier_mito_diff: float = 5.0,
-    kmeans_n_init: int = 10,
+    kmeans_n_init: int = 1,
     scrublet_approx_neighbors: bool = False,
     compute_embedding: bool = True,
 ) -> sc.AnnData:
@@ -103,9 +103,8 @@ def run_qclus(
         outlier_filter (bool, optional): Whether to perform outlier filtering.
         outlier_unspliced_diff (float, optional): Unspliced fraction difference threshold for outlier filtering.
         outlier_mito_diff (float, optional): Mitochondrial percentage difference threshold for outlier filtering.
-        kmeans_n_init (int, optional): Number of k-means restarts; the best one is kept. The default of 10
-            is what scikit-learn ran when QClus was written. 1 gives the labels of QClus 0.3.0, and of
-            earlier versions with scikit-learn 1.4 or later, which changed its default to one run.
+        kmeans_n_init (int, optional): Number of k-means restarts; the best one is kept. The default of 1
+            is what scikit-learn 1.4 and later run when it is not set, as in QClus 0.2.0 and earlier.
         scrublet_approx_neighbors (bool, optional): Whether Scrublet uses approximate nearest neighbours
             (annoy) instead of exact ones. QClus 0.2.0 and earlier used approximate neighbours, which
             give wrong results where annoy is broken.

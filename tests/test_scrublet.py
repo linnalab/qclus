@@ -86,7 +86,7 @@ def test_kmeans_restarts_reach_scikit_learn(dataset, monkeypatch, n_init):
     assert seen["n_init"] == n_init
 
 
-def test_kmeans_runs_ten_restarts_by_default(dataset, monkeypatch):
+def test_kmeans_runs_one_restart_by_default(dataset, monkeypatch):
     seen = {}
     original = utils.KMeans
 
@@ -96,4 +96,4 @@ def test_kmeans_runs_ten_restarts_by_default(dataset, monkeypatch):
 
     monkeypatch.setattr(utils, "KMeans", spy)
     qc.run_qclus(dataset.counts_path, dataset.fraction_unspliced)
-    assert seen["n_init"] == 10
+    assert seen["n_init"] == 1

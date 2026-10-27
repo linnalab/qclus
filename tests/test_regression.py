@@ -86,7 +86,7 @@ def test_approximate_neighbours_reproduce_the_reference(reference):
     if not utils.annoy_works():
         pytest.skip("annoy returns wrong neighbours in this environment")
     obs, extra, _ = reference
-    result = run(scrublet_approx_neighbors=True, kmeans_n_init=1)
+    result = run(scrublet_approx_neighbors=True)
 
     assert_features_unchanged(result, obs)
     assert_same_labels(result.obs["kmeans"], obs["kmeans"], "k-means labels")
@@ -101,21 +101,9 @@ def default_result():
     return run()
 
 
-def test_defaults_change_the_doublet_step_and_the_restarts(reference, default_result):
+def test_defaults_change_only_the_doublet_step(reference, default_result):
     obs, extra, _ = reference
     result = default_result
-
-    assert_features_unchanged(result, obs)
-    assert_same_labels(result.obs.loc[extra.index, "kmeans"], extra["kmeans_n_init_10"], "k-means labels")
-    np.testing.assert_allclose(
-        result.obs.loc[extra.index, "score_scrublet"], extra["score_scrublet_exact"], rtol=0, atol=1e-9
-    )
-    assert_same_labels(result.obs["qclus"], expected_labels(obs, extra, "qclus_n_init_10_exact"), "QClus labels")
-
-
-def test_one_restart_changes_only_the_doublet_step(reference):
-    obs, extra, _ = reference
-    result = run(kmeans_n_init=1, compute_embedding=False)
 
     assert_features_unchanged(result, obs)
     assert_same_labels(result.obs["kmeans"], obs["kmeans"], "k-means labels")
@@ -136,3 +124,11 @@ def test_embedding_matches_the_reference(default_result):
     np.testing.assert_allclose(
         default_result.uns["QClus_umap"], np.load(REFERENCE / "reference_umap.npy"), rtol=0, atol=1e-6
     )
+
+
+def test_ten_restarts_match_the_reference(reference):
+    obs, extra, _ = reference
+    result = run(kmeans_n_init=10)
+
+    assert_same_labels(result.obs.loc[extra.index, "kmeans"], extra["kmeans_n_init_10"], "k-means labels")
+    assert_same_labels(result.obs["qclus"], expected_labels(obs, extra, "qclus_n_init_10_exact"), "QClus labels")
