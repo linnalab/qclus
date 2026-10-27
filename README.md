@@ -69,6 +69,8 @@ If you do not have the necessary values from the methods above, we have implemen
 
 Give it the GTF file of the reference the reads were aligned to (`genes/genes.gtf` of the Cell Ranger reference), and, as for `velocyto run10x -m`, a repeat mask (RepeatMasker's track from the UCSC Table Browser, as GTF). It then counts spliced, unspliced and ambiguous molecules with the rules of velocyto, which QClus's thresholds were tuned on, from the BAM file as it is: it needs neither velocyto's sorting by barcode nor its memory. Without a GTF file it counts alignments by Cell Ranger's region tag, which is faster but gives fractions about 0.06 higher than velocyto's on heart nuclei, so that more of them pass the outlier filter.
 
+If you need velocyto only for this fraction, the BAM counter is the faster and cheaper choice: on 75 ENCODE heart samples it gave velocyto's counts for every barcode in a median of 11 minutes and 4 GB of memory, where velocyto took 2.2 hours and 36 GB ([evaluation](https://github.com/linnalab/qclus/tree/main/validation/encode_velocyto)).
+
 ### QClus quickstart
 
 From here you can run the `quickstart_qclus` function. For cardiac data, the function runs QClus with the settings of the original publication, with one difference: doublet scores are now calculated with exact instead of approximate nearest neighbours. Pass `scrublet_approx_neighbors=True` to use the approximate search of earlier versions.
