@@ -211,13 +211,14 @@ def make_reads(rng):
                         # The other alignment of the multimapper
                         other = int(rng.integers(30_000, intergenic_end))
                         alignments.append(("chr1", other, [(0, READ_LENGTH)], reverse, dict(tags), 256))
-        # A UMI used by two genes of the same region in one cell: velocyto drops the molecule
-        if cell == 3 and "GA" in GENES and "GB" in GENES:
-            umi = _umi(rng)
-            for gene in ("GA", "GB"):
-                contig, reads = _molecule_reads(rng, gene)
-                for start, cigar, reverse in reads:
-                    alignments.append((contig, start, cigar, reverse, {"CB": f"{barcode}-1", "UB": umi, "NH": 1}, 0))
+        # A UMI used by two genes in one cell, of the same region and of two chromosomes: velocyto drops the molecule
+        for shared_cell, pair in ((3, ("GA", "GB")), (4, ("GA", "GH"))):
+            if cell == shared_cell and all(gene in GENES for gene in pair):
+                umi = _umi(rng)
+                for gene in pair:
+                    contig, reads = _molecule_reads(rng, gene)
+                    for start, cigar, reverse in reads:
+                        alignments.append((contig, start, cigar, reverse, {"CB": f"{barcode}-1", "UB": umi, "NH": 1}, 0))
     return barcodes, alignments
 
 

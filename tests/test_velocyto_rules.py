@@ -363,6 +363,47 @@ def test_molecule_spliced_across_a_tile_boundary_counts_once(tmp_path):
     assert case_counts(paths, tiles=1) == case_counts(paths, tiles=2) == (0, 1, 0)
 
 
+def test_umi_used_in_two_tiles_is_not_counted(tmp_path):
+    # Each barcode uses one UMI in GENE-A and in GENE-B, which two tiles separate, and another UMI in GENE-A only.
+    # velocyto combines the reads of a barcode and UMI across the genome: the first molecule keeps no transcript
+    # model and is not counted. The second barcode's UMIs cannot be coded (_molecule_code) and take the other path.
+    genes = [
+        ("chr1", "+", "GENE-A", "TA", [(1001, 3000)]),
+        ("chr1", "+", "GENE-B", "TB", [(5001, 5100), (5501, 6000)]),
+        ("chr1", "+", "LAST", "TL", [(9001, 9100)]),
+    ]
+    reads = []
+    for cell, (shared, single) in enumerate([("ACGTACGTACGT", "TTTTGGGGCCCC"), ("UMI-1", "UMI-2")], start=1):
+        tags = {"CB": barcode(cell) + "-1", "NH": 1}
+        reads += [(contig, start, "90M", False, {**tags, "UB": umi})
+                  for contig, start, umi in [("chr1", 1101, shared), ("chr1", 5601, shared), ("chr1", 2001, single)]]
+    paths = write_case(tmp_path, genes, [], reads, [("chr1", 10_000)], [barcode(1), barcode(2)])
+    for tiles in (1, 2):
+        result = utils.fraction_unspliced_from_bam(
+            bam_path=paths["bam"], barcodes_path=paths["barcodes"], gtf_path=paths["gtf"], tiles=tiles, cores=1)
+        for cell in (1, 2):
+            assert tuple(result.loc[barcode(cell), list(velocyto_rules.LAYERS)]) == (1, 0, 0)
+    # Regions given by the user are counted separately, so each counts the shared UMI's molecule
+    result = utils.fraction_unspliced_from_bam(
+        bam_path=paths["bam"], barcodes_path=paths["barcodes"], gtf_path=paths["gtf"],
+        regions=[("chr1", 0, 4501), ("chr1", 4501, 10_000)], cores=1)
+    assert tuple(result.loc[barcode(1), list(velocyto_rules.LAYERS)]) == (3, 0, 0)
+
+
+def test_molecule_code():
+    code = velocyto_rules._molecule_code
+    assert code(5, "ACGT", velocyto_rules.UNSPLICED) >> 34 == 5
+    assert code(5, "ACGT", velocyto_rules.UNSPLICED) & 3 == velocyto_rules.UNSPLICED
+    assert code(5, "ACGT", None) & 3 == velocyto_rules.NOT_COUNTED
+    # One barcode and UMI differ only in the class bits; UMIs of other lengths differ above them
+    assert code(5, "ACGT", velocyto_rules.SPLICED) ^ code(5, "ACGT", velocyto_rules.AMBIGUOUS) < 4
+    assert code(5, "ACGT", velocyto_rules.SPLICED) ^ code(5, "AACGT", velocyto_rules.SPLICED) >= 4
+    assert code(5, "T" * velocyto_rules.MAX_CODED_UMI, None) < 2 ** 64
+    assert code(5, "T" * (velocyto_rules.MAX_CODED_UMI + 1), None) is None
+    assert code(5, "ACNGT", None) is None
+    assert code(5, "", None) is None
+
+
 def test_transcripts_that_start_together_are_ordered_by_their_gtf_lines(tmp_path):
     # T-A and T-B share their first and last exons; velocyto never searches the last feature of a chromosome
     # strand, which is the last exon of the transcript that sorts last by its GTF line, T-B. The molecule's first

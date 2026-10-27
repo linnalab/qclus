@@ -16,8 +16,8 @@ The rules, with the velocyto file each comes from:
   own strand only, by more than 5 bases. Of the transcript models it overlaps, a read keeps those with the most
   matching segments, and a spliced read keeps only those whose exon or intron ends lie within 6 bases of the
   read's segment ends.
-- Molecules (molitem.py): the reads of one barcode and UMI form a molecule, which keeps the transcript models that
-  all its reads are compatible with.
+- Molecules (molitem.py, and counter.py, count): the reads of one barcode and UMI form a molecule, wherever they
+  lie in the genome, which keeps the transcript models that all its reads are compatible with.
 - Repeats (counter.py, read_repeats and _count_cell_batch_stranded): a read that lies entirely inside a masked
   repeat on its own strand is left out. Repeats closer than 5 bases are joined first.
 - Introns are validated (counter.py, mark_up_introns) when an unspliced read crosses one of their ends into the
@@ -40,11 +40,11 @@ Some details of velocyto's code change the counts, and are reproduced so that th
   searched.
 
 The genome is processed in tiles whose boundaries lie between genes, so that the reads that can validate an
-intron reach the same worker, and so do the reads of almost every molecule. A molecule with a read spliced across
-a tile boundary is combined from the tiles it touches by count_molecules. What remains different from velocyto:
+intron reach the same worker, and so do the reads of almost every molecule. count_molecules combines the others: a
+molecule with a read spliced across a tile boundary from the tiles it touches, and a barcode and UMI with reads in
+tiles that no read connects into a molecule that keeps no transcript model, which velocyto does not count. What
+remains different from velocyto:
 
-- velocyto keeps the reads of a barcode and UMI together across the whole genome, so a UMI that a barcode uses in two
-  genes of different tiles makes one molecule, which it drops; here it makes two. With 12-base UMIs this is rare.
 - A read without an NH tag is taken as unique; velocyto stops with an error.
 - If any exon lacks an exon_number, all exons are numbered by position; velocyto looks at the first 500 lines only.
 """
@@ -78,8 +78,14 @@ PRUNE_STEP = 1_000
 
 LAYERS = ("spliced", "unspliced", "ambiguous")
 SPLICED, UNSPLICED, AMBIGUOUS = range(3)
+# The class of a molecule that is not counted, in a molecule code
+NOT_COUNTED = 3
 # The mapping record of a read that matches no transcript model
 EMPTY = frozenset()
+
+# Molecule codes hold UMIs of up to this many bases
+MAX_CODED_UMI = 15
+_UMI_DIGITS = str.maketrans("ACGT", "0123")
 
 _TRANSCRIPT_ID = re.compile('transcript_id "([^"]+)"')
 _GENE_ID = re.compile('gene_id "([^"]+)"')
@@ -600,6 +606,68 @@ class _Strand:
 
 
 
+def _molecule_code(row: int, umi: str, layer: Optional[int]) -> Optional[int]:
+    """
+    A molecule's barcode row, UMI and class in one 64-bit integer, or None if the UMI cannot be coded.
+
+    From the highest bits: the row; the UMI, two bits per base after a leading 1, so that UMIs of different lengths
+    differ; and two bits of class, NOT_COUNTED for a molecule that is not counted. UMIs of more than MAX_CODED_UMI
+    bases, or with letters other than ACGT, cannot be coded.
+    """
+    if not 0 < len(umi) <= MAX_CODED_UMI or umi.strip("ACGT"):
+        return None
+    umi_code = (1 << (2 * len(umi))) | int(umi.translate(_UMI_DIGITS), 4)
+    return (row << 34) | (umi_code << 2) | (NOT_COUNTED if layer is None else layer)
+
+
+def _drop_shared_umis(codes: List[np.ndarray], others: Dict[tuple, List[int]], counts: np.ndarray) -> int:
+    """
+    Remove from counts the molecules whose barcode and UMI have reads in more than one tile.
+
+    velocyto combines the reads of a barcode and UMI wherever they lie. Tiles share no transcript model, so such a
+    molecule keeps none, and velocyto does not count it; molecules with a read across a tile boundary were combined
+    before they reach this function.
+
+    Parameters:
+        codes (List[np.ndarray]): Molecule codes (_molecule_code) of each tile; emptied to save memory.
+        others (Dict[tuple, List[int]]): Classes per (row, UMI), one per tile, of the molecules without a code.
+        counts (np.ndarray): Molecules per barcode row and class, changed in place.
+
+    Returns:
+        int: The number of molecules of the tiles that were dropped, counted or not.
+    """
+    # One array, filled as the tiles' arrays are released
+    combined = np.empty(sum(len(chunk) for chunk in codes), dtype=np.uint64)
+    position = 0
+    while codes:
+        chunk = codes.pop()
+        combined[position:position + len(chunk)] = chunk
+        position += len(chunk)
+    combined.sort()
+
+    # Codes of one barcode and UMI differ only in their class bits; compared in blocks to limit memory
+    shared = np.zeros(len(combined), dtype=bool)
+    block = 1 << 24
+    for start in range(0, len(combined) - 1, block):
+        end = min(start + block, len(combined) - 1)
+        same = (combined[start + 1:end + 1] ^ combined[start:end]) < 4
+        shared[start:end] |= same
+        shared[start + 1:end + 1] |= same
+    dropped = combined[shared]
+    layers = (dropped & np.uint64(3)).astype(np.intp)
+    counted = layers != NOT_COUNTED
+    np.subtract.at(counts, ((dropped[counted] >> np.uint64(34)).astype(np.intp), layers[counted]), 1)
+    n_dropped = len(dropped)
+
+    for (row, _), tile_layers in others.items():
+        if len(tile_layers) > 1:
+            n_dropped += len(tile_layers)
+            for layer in tile_layers:
+                if layer != NOT_COUNTED:
+                    counts[row, layer] -= 1
+    return n_dropped
+
+
 def _merge(first: frozenset, second: frozenset) -> frozenset:
     """The transcript models two mapping records share, with their matches combined (molitem.py)."""
     other = {entry[0]: entry for entry in second}
@@ -679,13 +747,15 @@ def count_tile(
     UB_tag: str = "UB",
     bam_index_path: Optional[str] = None,
     count_by_start: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[tuple, frozenset], set]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Dict[tuple, int], Dict[tuple, frozenset], set]:
     """
     Count the spliced, unspliced and ambiguous molecules of each barcode in one genomic region.
 
     With count_by_start, a read that crosses a boundary of the region (a splice across the gap between two genes)
     may share its molecule with reads of the next region. Such molecules are not counted here but returned, with
-    the introns this region validated, for count_molecules to combine.
+    the introns this region validated, for count_molecules to combine. The barcode, UMI and class of every other
+    molecule are returned too, so that count_molecules can drop those whose barcode and UMI have reads in another
+    region.
 
     Parameters:
         interval (tuple): (contig, start, end), 0-based and half-open.
@@ -700,8 +770,10 @@ def count_tile(
 
     Returns:
         Tuple: Rows of the barcodes with a read that velocyto reads; rows of the barcodes with counted molecules;
-            their counts (one column per class of LAYERS); the molecules left to combine, by (row, UMI), with
-            their introns named (model, start, end); and the introns validated here, if there are such molecules.
+            their counts (one column per class of LAYERS); with count_by_start, the codes (_molecule_code) of the
+            molecules counted here or not counted at all, and the classes, by (row, UMI), of those whose UMI has no
+            code; the molecules left to combine, by (row, UMI), with their introns named (model, start, end); and
+            the introns validated here, if there are such molecules.
     """
     import pysam
 
@@ -816,17 +888,26 @@ def count_tile(
 
     counts: Dict[int, List[int]] = {}
     classes: Dict[int, Optional[int]] = {}
-    for (row, _), record in molecules.items():
+    codes: List[int] = []
+    uncoded: Dict[tuple, int] = {}
+    for molecule, record in molecules.items():
         key = id(record)
         if key not in classes:
             classes[key] = classify(record, validated)
         layer = classes[key]
         if layer is not None:
-            counts.setdefault(row, [0, 0, 0])[layer] += 1
+            counts.setdefault(molecule[0], [0, 0, 0])[layer] += 1
+        if count_by_start:
+            code = _molecule_code(*molecule, layer)
+            if code is None:
+                uncoded[molecule] = NOT_COUNTED if layer is None else layer
+            else:
+                codes.append(code)
 
     rows = np.fromiter(counts.keys(), dtype=np.int64, count=len(counts))
     values = np.array(list(counts.values()), dtype=np.int64).reshape(-1, 3)
-    return np.fromiter(seen, dtype=np.int64, count=len(seen)), rows, values, deferred, validated_names
+    return (np.fromiter(seen, dtype=np.int64, count=len(seen)), rows, values, np.array(codes, dtype=np.uint64),
+            uncoded, deferred, validated_names)
 
 
 def count_molecules(
@@ -845,7 +926,8 @@ def count_molecules(
     Count the spliced, unspliced and ambiguous molecules of each barcode with velocyto's rules.
 
     By default the genome is split into tiles with boundaries between genes, and every read is used once, in the
-    tile that contains its start. If regions are given, every read overlapping a region is used for that region,
+    tile that contains its start, and the reads of a barcode and UMI are combined across tiles. If regions are
+    given, every read overlapping a region is used for that region, and molecules are not combined across regions,
     so a molecule overlapping two regions is counted in both.
 
     Parameters:
@@ -902,11 +984,17 @@ def count_molecules(
         # the introns validated in the tiles they come from
         deferred: Dict[tuple, frozenset] = {}
         validated: set = set()
+        # Barcode, UMI and class of every other molecule, to find barcodes and UMIs with reads in several tiles
+        codes: List[np.ndarray] = []
+        uncoded: Dict[tuple, List[int]] = {}
 
         def add(result):
-            seen_rows, count_rows, values, tile_deferred, tile_validated = result
+            seen_rows, count_rows, values, tile_codes, tile_uncoded, tile_deferred, tile_validated = result
             seen[seen_rows] = True
             counts[count_rows] += values  # a barcode appears once per tile
+            codes.append(tile_codes)
+            for molecule, layer in tile_uncoded.items():
+                uncoded.setdefault(molecule, []).append(layer)
             validated.update(tile_validated)
             for molecule, record in tile_deferred.items():
                 current = deferred.get(molecule)
@@ -932,11 +1020,22 @@ def count_molecules(
                 progress.update()
         progress.close()
 
-        for (row, _), record in deferred.items():
+        deferred_codes = []
+        for molecule, record in deferred.items():
             layer = classify(record, validated)
             if layer is not None:
-                counts[row, layer] += 1
+                counts[molecule[0], layer] += 1
+            code = _molecule_code(*molecule, layer)
+            if code is None:
+                uncoded.setdefault(molecule, []).append(NOT_COUNTED if layer is None else layer)
+            else:
+                deferred_codes.append(code)
+        codes.append(np.array(deferred_codes, dtype=np.uint64))
         if deferred:
             logger.info("%d molecules had reads in more than one tile.", len(deferred))
+        n_dropped = _drop_shared_umis(codes, uncoded, counts)
+        if n_dropped:
+            logger.info("%d molecules of different tiles shared their barcode and UMI with another and were dropped, "
+                        "as velocyto drops them.", n_dropped)
 
         return pd.DataFrame(counts[seen], index=pd.Index(np.array(names, dtype=object)[seen]), columns=list(LAYERS))
